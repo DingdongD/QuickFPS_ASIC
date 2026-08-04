@@ -19,6 +19,7 @@ set RTL_FILES [concat \
     [glob -nocomplain "$WORK_ROOT/RTL/memory/*.v"] \
     [glob -nocomplain "$WORK_ROOT/RTL/dma/*.v"] \
     [glob -nocomplain "$WORK_ROOT/RTL/system/*.v"] \
+    [glob -nocomplain "$WORK_ROOT/RTL/ptpx/*.v"] \
     [glob -nocomplain "$WORK_ROOT/RTL/top/*.v"]]
 
 set_app_var target_library [list $TARGET_DB]
