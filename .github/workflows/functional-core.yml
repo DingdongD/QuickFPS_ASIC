@@ -1,0 +1,17 @@
+name: Functional Core RTL
+
+on:
+  push:
+    branches:
+      - feature/complete-functional-core
+  pull_request:
+
+jobs:
+  iverilog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Icarus Verilog
+        run: sudo apt-get update && sudo apt-get install -y iverilog
+      - name: Run functional regressions
+        run: bash scripts/run_functional_core_tests.sh
