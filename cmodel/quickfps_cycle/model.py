@@ -46,7 +46,6 @@ class PointTask:
     action: BucketAction
     bucket: BucketWork
     chunks: List[ChunkState]
-    next_unscheduled: int = 0
     active_chunk: Optional[int] = None
     completed_chunks: int = 0
     waiting_return: bool = False
@@ -101,7 +100,7 @@ class _PointEngineSystem:
         self.far_fifo: Deque[int] = deque()
         self.task: Optional[PointTask] = None
         self._slot_owner: List[Optional[int]] = [None, None]
-        self._dma_queue: Deque[MemoryRequest] = deque()
+        self._dma_queue: Deque[Tuple[int, MemoryRequest]] = deque()
         self._tag_owner: Dict[int, Tuple[int, str]] = {}
         self._next_tag = 1
 
@@ -150,6 +149,7 @@ class _PointEngineSystem:
         return bucket_id
 
     def _make_chunks(self, action: BucketAction, bucket: BucketWork) -> List[ChunkState]:
+        del action
         chunks = []
         remaining = bucket.point_count
         offset = 0
@@ -162,7 +162,22 @@ class _PointEngineSystem:
             index += 1
         return chunks
 
-    def _burst_requests(
+    def _axi_burst_count(self, address: int, size: int) -> int:
+        count = 0
+        done = 0
+        while done < size:
+            current = address + done
+            bytes_to_4k = 4096 - (current & 0xFFF)
+            transfer = min(
+                size - done,
+                self.config.dma_max_burst_bytes,
+                bytes_to_4k,
+            )
+            done += transfer
+            count += 1
+        return count
+
+    def _memory_requests(
         self,
         cycle: int,
         address: int,
@@ -172,26 +187,61 @@ class _PointEngineSystem:
         chunk_index: int,
         phase: str,
     ) -> Set[int]:
+        """Lower an AXI byte range into DRAM transaction-sized requests.
+
+        The RTL DMA still observes and counts full AXI bursts.  The memory
+        backend sees one request per DRAM transaction (64 B by default), which
+        matches one DRAMsim3 ``AddTransaction`` and avoids treating a 512 B AXI
+        burst as a single DRAM command.
+        """
         tags: Set[int] = set()
-        max_bytes = self.config.dma_bus_bytes * self.config.dma_max_burst_beats
-        done = 0
-        while done < size:
-            burst_size = min(max_bytes, size - done)
+        transaction = self.config.dram_transaction_bytes
+        first_line = address // transaction
+        last_line = (address + size - 1) // transaction
+        ready_cycle = cycle + self.config.dma_command_cycles
+        for line in range(first_line, last_line + 1):
+            line_address = line * transaction
+            overlap_start = max(address, line_address)
+            overlap_end = min(address + size, line_address + transaction)
+            overlap_bytes = overlap_end - overlap_start
             tag = self._next_tag
             self._next_tag += 1
             request = MemoryRequest(
                 tag=tag,
-                address=address + done,
-                size=burst_size,
+                address=line_address,
+                size=overlap_bytes,
                 is_write=is_write,
                 stream=stream,
-                submitted_cycle=cycle,
+                submitted_cycle=ready_cycle,
             )
-            self._dma_queue.append(request)
+            self._dma_queue.append((ready_cycle, request))
             self._tag_owner[tag] = (chunk_index, phase)
             tags.add(tag)
-            done += burst_size
         return tags
+
+    def _record_axi_command(
+        self, cycle: int, address: int, size: int, stream: str, is_write: bool
+    ) -> None:
+        bursts = self._axi_burst_count(address, size)
+        self.counters["dma_commands"] += 1
+        self.counters["axi_bursts"] += bursts
+        self.counters[f"{stream}_commands"] += 1
+        self.counters[f"{stream}_axi_bursts"] += bursts
+        self.events.append(
+            TraceEvent(
+                cycle,
+                "dma",
+                "command",
+                {
+                    "address": address,
+                    "bytes": size,
+                    "write": is_write,
+                    "stream": stream,
+                    "axi_bursts": bursts,
+                    "ready_cycle": cycle + self.config.dma_command_cycles,
+                },
+            )
+        )
 
     def _schedule_load(self, task: PointTask, chunk: ChunkState, cycle: int) -> None:
         point_index = task.bucket.point_ptr + chunk.point_offset
@@ -203,19 +253,23 @@ class _PointEngineSystem:
             self.workload.dist_base
             + point_index * self.config.dist_bytes_per_point
         )
-        chunk.load_tags |= self._burst_requests(
+        coord_size = chunk.point_count * self.config.coord_bytes_per_point
+        dist_size = chunk.point_count * self.config.dist_bytes_per_point
+        self._record_axi_command(cycle, coord_addr, coord_size, "coord_read", False)
+        self._record_axi_command(cycle, dist_addr, dist_size, "dist_read", False)
+        chunk.load_tags |= self._memory_requests(
             cycle,
             coord_addr,
-            chunk.point_count * self.config.coord_bytes_per_point,
+            coord_size,
             False,
             "coord_read",
             chunk.index,
             "load",
         )
-        chunk.load_tags |= self._burst_requests(
+        chunk.load_tags |= self._memory_requests(
             cycle,
             dist_addr,
-            chunk.point_count * self.config.dist_bytes_per_point,
+            dist_size,
             False,
             "dist_read",
             chunk.index,
@@ -244,10 +298,12 @@ class _PointEngineSystem:
             self.workload.dist_base
             + point_index * self.config.dist_bytes_per_point
         )
-        chunk.write_tags |= self._burst_requests(
+        size = chunk.point_count * self.config.dist_bytes_per_point
+        self._record_axi_command(cycle, address, size, "dist_write", True)
+        chunk.write_tags |= self._memory_requests(
             cycle,
             address,
-            chunk.point_count * self.config.dist_bytes_per_point,
+            size,
             True,
             "dist_write",
             chunk.index,
@@ -292,7 +348,9 @@ class _PointEngineSystem:
     def _submit_dma(self, cycle: int) -> None:
         submitted = 0
         while self._dma_queue and submitted < self.config.dma_channels:
-            request = self._dma_queue[0]
+            ready_cycle, request = self._dma_queue[0]
+            if ready_cycle > cycle:
+                break
             if not self.memory.can_accept(request):
                 self.counters["dma_backpressure_cycles"] += 1
                 break
@@ -301,11 +359,14 @@ class _PointEngineSystem:
                 break
             self._dma_queue.popleft()
             submitted += 1
+            self.counters["dram_transactions"] += 1
+            # Keep the original counter name as a compatibility alias for
+            # previously generated reports.
             self.counters["dma_transactions"] += 1
             self.events.append(
                 TraceEvent(
                     cycle,
-                    "dma",
+                    "dram",
                     "submit",
                     {
                         "tag": request.tag,
@@ -320,11 +381,12 @@ class _PointEngineSystem:
     def _handle_completions(
         self, cycle: int, completions: Iterable[MemoryCompletion]
     ) -> None:
+        completion_list = list(completions)
         if self.task is None:
-            if list(completions):
+            if completion_list:
                 raise RuntimeError("memory completion without an active point task")
             return
-        for completion in completions:
+        for completion in completion_list:
             owner = self._tag_owner.pop(completion.tag, None)
             if owner is None:
                 raise RuntimeError(f"unknown DMA completion tag {completion.tag}")
@@ -479,6 +541,10 @@ class QuickFPSCycleModel:
         self.accelerator.validate()
         self.dram = dram or DramConfig()
         self.dram.validate()
+        if self.accelerator.dram_transaction_bytes != self.dram.burst_bytes:
+            raise ValueError(
+                "accelerator dram_transaction_bytes must match DramConfig.burst_bytes"
+            )
         self.memory: MemoryBackend = memory_backend or BankedDramModel(self.dram)
         self.trace_events = trace_events
 
@@ -495,7 +561,6 @@ class QuickFPSCycleModel:
         pipeline: Deque[Tuple[int, BucketAction]] = deque()
         outstanding = 0
         inject_cooldown = 0
-        scan_done = False
         sampled_indices: List[int] = []
 
         if not self.workload.iterations:
@@ -518,13 +583,9 @@ class QuickFPSCycleModel:
         events.append(TraceEvent(0, "bucket_engine", "iteration_start", {"iteration": 0}))
 
         while cycle < self.accelerator.max_cycles:
-            # Memory callbacks become visible to the DMA/Point-Engine at the
-            # beginning of the next accelerator cycle.
             point.step(cycle, pending_completions)
             pending_completions = []
 
-            # Collect at most one completed bucket per cycle, matching the
-            # single far-point FIFO read port.
             completed_bucket = point.pop_far(cycle)
             if completed_bucket is not None:
                 outstanding -= 1
@@ -606,7 +667,6 @@ class QuickFPSCycleModel:
                 current = self.workload.iterations[iteration_index]
                 sampled_indices.append(current.sampled_index)
                 action_index = 0
-                scan_done = False
                 inject_cooldown = 0
                 events.append(
                     TraceEvent(
