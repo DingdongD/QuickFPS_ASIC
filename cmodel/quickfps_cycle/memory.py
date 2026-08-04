@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import ctypes
 import math
-from collections import deque
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Deque, Dict, List, Optional, Protocol, Tuple
+from typing import Dict, List, Optional, Protocol, Tuple
 
 from .config import DramConfig
 
@@ -41,6 +41,7 @@ class MemoryBackend(Protocol):
     def submit(self, request: MemoryRequest) -> bool: ...
     def tick(self) -> List[MemoryCompletion]: ...
     def idle(self) -> bool: ...
+    def stats(self) -> Dict[str, int]: ...
 
 
 @dataclass
@@ -49,12 +50,45 @@ class _BankState:
     open_row: Optional[int] = None
 
 
+class _StreamActivity:
+    def __init__(self) -> None:
+        self.outstanding: Counter[str] = Counter()
+        self.busy_cycles: Counter[str] = Counter()
+        self.dma_busy_cycles = 0
+
+    def accepted(self, stream: str) -> None:
+        self.outstanding[stream] += 1
+
+    def complete(self, stream: str) -> None:
+        if self.outstanding[stream] <= 0:
+            raise RuntimeError(f"completion without outstanding {stream} request")
+        self.outstanding[stream] -= 1
+
+    def tick(self) -> None:
+        any_busy = False
+        for stream, count in self.outstanding.items():
+            if count > 0:
+                self.busy_cycles[stream] += 1
+                any_busy = True
+        if any_busy:
+            self.dma_busy_cycles += 1
+
+    def stats(self) -> Dict[str, int]:
+        value = {
+            f"{stream}_busy_cycles": cycles
+            for stream, cycles in self.busy_cycles.items()
+        }
+        value["dma_busy_cycles"] = self.dma_busy_cycles
+        value["max_streams"] = sum(1 for count in self.outstanding.values() if count > 0)
+        return value
+
+
 class BankedDramModel:
     """Deterministic cycle model with channel/bank/row state.
 
-    It is intentionally simple enough to inspect while preserving the key
-    effects needed by QuickFPS: queue capacity, bank conflicts, row hits,
-    precharge/activate cost, burst occupancy, and independent channels.
+    It preserves queue capacity, bank conflicts, row hits, activation and
+    precharge cost, burst occupancy, independent channels, and per-stream
+    reader/writer activity windows used by the PTPX energy adapter.
     """
 
     def __init__(self, config: DramConfig):
@@ -66,12 +100,15 @@ class BankedDramModel:
             _BankState()
             for _ in range(config.channels * config.banks_per_channel)
         ]
+        self._activity = _StreamActivity()
         self.accepted = 0
         self.completed = 0
         self.row_hits = 0
         self.row_misses = 0
         self.bytes_read = 0
         self.bytes_written = 0
+        self.latency_sum = 0
+        self.latency_max = 0
 
     def _decode(self, address: int) -> Tuple[int, int, int]:
         burst = address // self.config.burst_bytes
@@ -112,16 +149,19 @@ class BankedDramModel:
             self.bytes_read += request.size
         state.available_cycle = ready
         self._pending.append((ready, request))
+        self._activity.accepted(request.stream)
         self.accepted += 1
         return True
 
     def tick(self) -> List[MemoryCompletion]:
+        self._activity.tick()
         self.cycle += 1
         ready_items = [item for item in self._pending if item[0] <= self.cycle]
         self._pending = [item for item in self._pending if item[0] > self.cycle]
         ready_items.sort(key=lambda item: (item[0], item[1].tag))
-        completions = [
-            MemoryCompletion(
+        completions = []
+        for _, request in ready_items:
+            completion = MemoryCompletion(
                 tag=request.tag,
                 address=request.address,
                 is_write=request.is_write,
@@ -129,8 +169,10 @@ class BankedDramModel:
                 submitted_cycle=request.submitted_cycle,
                 completed_cycle=self.cycle,
             )
-            for _, request in ready_items
-        ]
+            self._activity.complete(request.stream)
+            self.latency_sum += completion.latency
+            self.latency_max = max(self.latency_max, completion.latency)
+            completions.append(completion)
         self.completed += len(completions)
         return completions
 
@@ -138,23 +180,26 @@ class BankedDramModel:
         return not self._pending
 
     def stats(self) -> Dict[str, int]:
-        return {
+        value = {
             "accepted": self.accepted,
             "completed": self.completed,
             "row_hits": self.row_hits,
             "row_misses": self.row_misses,
             "bytes_read": self.bytes_read,
             "bytes_written": self.bytes_written,
+            "latency_sum": self.latency_sum,
+            "latency_max": self.latency_max,
         }
+        value.update(self._activity.stats())
+        return value
 
 
 class DramSim3Backend:
     """ctypes wrapper around ``libquickfps_dramsim3_bridge.so``.
 
-    The bridge is built from ``dramsim3_bridge/`` and links the official,
-    pinned ``umd-memsys/DRAMsim3`` repository. DRAMsim3 completes one address
-    per callback; the bridge associates same-address transactions with tags in
-    submission order before returning them to Python.
+    The bridge links the official pinned ``umd-memsys/DRAMsim3`` repository.
+    The Python side submits exactly one request per configured DRAM transaction
+    and tracks the activity window of each QuickFPS DMA stream.
     """
 
     def __init__(
@@ -172,6 +217,13 @@ class DramSim3Backend:
             raise RuntimeError("failed to create DRAMsim3 backend")
         self.cycle = 0
         self._requests: Dict[int, MemoryRequest] = {}
+        self._activity = _StreamActivity()
+        self.accepted = 0
+        self.completed = 0
+        self.bytes_read = 0
+        self.bytes_written = 0
+        self.latency_sum = 0
+        self.latency_max = 0
 
     def _configure_api(self) -> None:
         self._lib.qfps_dramsim3_create.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
@@ -219,9 +271,16 @@ class DramSim3Backend:
         )
         if accepted:
             self._requests[request.tag] = request
+            self._activity.accepted(request.stream)
+            self.accepted += 1
+            if request.is_write:
+                self.bytes_written += request.size
+            else:
+                self.bytes_read += request.size
         return accepted
 
     def tick(self) -> List[MemoryCompletion]:
+        self._activity.tick()
         self._lib.qfps_dramsim3_tick(self._handle)
         self.cycle += 1
         completions: List[MemoryCompletion] = []
@@ -236,21 +295,38 @@ class DramSim3Backend:
                 ctypes.byref(is_write),
             ):
                 break
-            request = self._requests.pop(int(tag.value))
-            completions.append(
-                MemoryCompletion(
-                    tag=request.tag,
-                    address=int(address.value),
-                    is_write=bool(is_write.value),
-                    stream=request.stream,
-                    submitted_cycle=request.submitted_cycle,
-                    completed_cycle=self.cycle,
-                )
+            request = self._requests.pop(int(tag.value), None)
+            if request is None:
+                raise RuntimeError(f"DRAMsim3 returned unknown tag {int(tag.value)}")
+            completion = MemoryCompletion(
+                tag=request.tag,
+                address=int(address.value),
+                is_write=bool(is_write.value),
+                stream=request.stream,
+                submitted_cycle=request.submitted_cycle,
+                completed_cycle=self.cycle,
             )
+            self._activity.complete(request.stream)
+            self.latency_sum += completion.latency
+            self.latency_max = max(self.latency_max, completion.latency)
+            completions.append(completion)
+        self.completed += len(completions)
         return completions
 
     def idle(self) -> bool:
         return not self._requests
+
+    def stats(self) -> Dict[str, int]:
+        value = {
+            "accepted": self.accepted,
+            "completed": self.completed,
+            "bytes_read": self.bytes_read,
+            "bytes_written": self.bytes_written,
+            "latency_sum": self.latency_sum,
+            "latency_max": self.latency_max,
+        }
+        value.update(self._activity.stats())
+        return value
 
     def close(self) -> None:
         if getattr(self, "_handle", None):
