@@ -31,9 +31,9 @@ module tb_axi_burst_reader_activity;
     assign rlast = beats_left == 1;
     assign rdata = {8{lfsr}};
 
-    axi_burst_reader #(
-        .ADDR_W(ADDR_W), .DATA_W(DATA_W), .MAX_BURST_BEATS(16)
-    ) dut (
+    // Keep the PTPX activity bench at the module defaults so the same source
+    // instantiates the parameter-free mapped netlist after synthesis.
+    axi_burst_reader dut (
         .clk(clk), .rst_n(rst_n),
         .cmd_valid(cmd_valid), .cmd_ready(cmd_ready),
         .cmd_addr(64'h0000_0000_0000_0f00), .cmd_bytes(32'd1600),
