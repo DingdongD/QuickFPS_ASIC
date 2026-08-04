@@ -57,10 +57,7 @@ module tb_quickfps_stream_subsystem;
     assign d_rlast = d_beats == 1;
     assign d_rdata = {8{lfsr ^ 32'ha5a5_5a5a}};
 
-    quickfps_stream_subsystem #(
-        .ADDR_W(ADDR_W), .AXI_DATA_W(DATA_W),
-        .COUNT_W(COUNT_W), .CHUNK_POINTS(256)
-    ) dut (
+    quickfps_stream_subsystem dut (
         .clk(clk), .rst_n(rst_n),
         .bucket_valid(bucket_valid), .bucket_ready(bucket_ready),
         .bucket_coord_addr(64'h0000_0000_0000_2000),
