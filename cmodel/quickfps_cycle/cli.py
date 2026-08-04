@@ -5,8 +5,8 @@ import json
 from pathlib import Path
 
 from .config import AcceleratorConfig, DramConfig
+from .cycle_model import QuickFPSCycleModel
 from .memory import DramSim3Backend
-from .model import QuickFPSCycleModel
 from .power import PTPXEnergyModel
 from .workload import Workload, synthetic_workload
 
@@ -21,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--iterations", type=int, default=4)
     parser.add_argument("--chunk-points", type=int, default=256)
+    parser.add_argument("--bucket-decision-fifo-depth", type=int, default=8)
     parser.add_argument("--bucket-fifo-depth", type=int, default=8)
     parser.add_argument("--far-fifo-depth", type=int, default=8)
     parser.add_argument("--dram-banks", type=int, default=16)
@@ -48,6 +49,7 @@ def main() -> int:
     accelerator = AcceleratorConfig(
         clock_hz=args.clock_hz,
         chunk_points=args.chunk_points,
+        bucket_decision_fifo_depth=args.bucket_decision_fifo_depth,
         bucket_fifo_depth=args.bucket_fifo_depth,
         far_fifo_depth=args.far_fifo_depth,
     )
