@@ -9,6 +9,7 @@ class AcceleratorConfig:
     clock_hz: int = 1_000_000_000
     bucket_cd_latency: int = 4
     bucket_issue_ii: int = 1
+    bucket_decision_fifo_depth: int = 8
     bucket_fifo_depth: int = 8
     far_fifo_depth: int = 8
     pe_rows: int = 4
@@ -41,6 +42,7 @@ class AcceleratorConfig:
             "clock_hz": self.clock_hz,
             "bucket_cd_latency": self.bucket_cd_latency,
             "bucket_issue_ii": self.bucket_issue_ii,
+            "bucket_decision_fifo_depth": self.bucket_decision_fifo_depth,
             "bucket_fifo_depth": self.bucket_fifo_depth,
             "far_fifo_depth": self.far_fifo_depth,
             "pe_rows": self.pe_rows,
@@ -65,6 +67,10 @@ class AcceleratorConfig:
                 raise ValueError(f"{name} must be positive, got {value}")
         if self.pe_rows != 4 or self.pe_cols != 4:
             raise ValueError("the validated QuickFPS datapath is fixed to a 4x4 PE array")
+        if self.bucket_decision_fifo_depth < self.bucket_cd_latency:
+            raise ValueError(
+                "bucket_decision_fifo_depth must cover all in-flight CD outputs"
+            )
         if self.dma_bus_bytes & (self.dma_bus_bytes - 1):
             raise ValueError("dma_bus_bytes must be a power of two")
         if self.dram_transaction_bytes & (self.dram_transaction_bytes - 1):
