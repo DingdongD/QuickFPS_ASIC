@@ -27,9 +27,7 @@ module tb_axi_burst_writer_activity;
     integer cycle = 0;
     reg [31:0] lfsr = 32'h2468_ace1;
 
-    axi_burst_writer #(
-        .ADDR_W(ADDR_W), .DATA_W(DATA_W), .MAX_BURST_BEATS(16)
-    ) dut (
+    axi_burst_writer dut (
         .clk(clk), .rst_n(rst_n),
         .cmd_valid(cmd_valid), .cmd_ready(cmd_ready),
         .cmd_addr(64'h0000_0000_1000_0f80), .cmd_bytes(32'd1000),
