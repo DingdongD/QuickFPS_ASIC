@@ -15,7 +15,7 @@ module tb_bucket_decision_pipe;
     reg rst_n=1'b0;
     reg in_valid=1'b0;
     wire in_ready;
-    reg [BIDX_W-1:0] in_bid=0;
+    wire [BIDX_W-1:0] in_bid;
     reg [ENTRY_W-1:0] in_entry={ENTRY_W{1'b0}};
     reg in_first_iter=1'b1;
     wire out_valid;
@@ -31,6 +31,8 @@ module tb_bucket_decision_pipe;
     integer first_accept=-1;
     integer first_output=-1;
     integer stall_cycles=0;
+
+    assign in_bid = sent[BIDX_W-1:0];
 
     bucket_decision_pipe #(
         .BIDX_W(BIDX_W), .PIDX_W(PIDX_W), .MCNT_W(MCNT_W),
@@ -60,22 +62,18 @@ module tb_bucket_decision_pipe;
         in_entry[E_FY +:32] = 32'h00000000;
         in_entry[E_FZ +:32] = 32'h00000000;
         in_entry[E_FDIST +:32] = 32'h3f800000;
-        in_entry[E_FIDX +:PIDX_W] = in_bid;
+        in_entry[E_FIDX +:PIDX_W] = {{(PIDX_W-BIDX_W){1'b0}}, in_bid};
     end
 
     always @(posedge clk) begin
         cycle <= cycle + 1;
-        // Hold the consumer for long enough to fill all eight reserved credits,
-        // then apply a second periodic stall pattern.
         if (cycle >= 12 && cycle < 25)
             out_ready <= 1'b0;
         else
             out_ready <= (cycle % 5 != 0);
 
-        if (rst_n) begin
+        if (rst_n)
             in_valid <= sent < 16;
-            in_bid <= sent[BIDX_W-1:0];
-        end
 
         if (in_valid && in_ready) begin
             if (first_accept < 0) first_accept <= cycle;
