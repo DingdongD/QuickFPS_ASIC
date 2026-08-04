@@ -76,6 +76,7 @@ jobs:
           assert result['iterations'] == 3
           assert result['cycles'] > 0
           assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
+          assert result['counters']['dram_transactions'] > result['counters']['axi_bursts']
           PY
 
       - name: Validate cycle-model assumptions against RTL traces
@@ -85,3 +86,52 @@ jobs:
             --workload build/quickfps_workload.json \
             --cycle-result build/cycle_result.json \
             --output build/rtl_cycle_validation.json
+
+  dramsim3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install DRAMsim3 dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libconfig++-dev
+
+      - name: Build official pinned DRAMsim3 bridge
+        run: bash scripts/build_dramsim3_bridge.sh
+
+      - name: Create DRAMsim3 smoke workload
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          python3 - <<'PY'
+          from quickfps_cycle.workload import synthetic_workload
+          synthetic_workload([300, 129, 17], iterations=2).save('build/dramsim3_workload.json')
+          PY
+
+      - name: Run cycle model with official DRAMsim3
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          LIB=$(find build/dramsim3_bridge -name 'libquickfps_dramsim3_bridge.so' -print -quit)
+          CFG=build/dramsim3_bridge/_deps/dramsim3_external-src/configs/DDR4_8Gb_x8_2400.ini
+          test -f "$LIB"
+          test -f "$CFG"
+          python3 -m quickfps_cycle.cli \
+            --workload build/dramsim3_workload.json \
+            --chunk-points 128 \
+            --bucket-fifo-depth 2 \
+            --far-fifo-depth 2 \
+            --dramsim3-lib "$LIB" \
+            --dramsim3-config "$CFG" \
+            --dramsim3-output-dir build/dramsim3_stats \
+            --output build/dramsim3_cycle_result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('build/dramsim3_cycle_result.json').read_text())
+          assert result['memory_backend'] == 'dramsim3'
+          assert result['cycles'] > 0
+          assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
+          assert result['counters']['dram_transactions'] > 0
+          PY
