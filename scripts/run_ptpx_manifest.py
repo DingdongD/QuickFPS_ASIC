@@ -21,7 +21,11 @@ def main() -> int:
     parser.add_argument("--manifest", type=Path, default=Path("ptpx/cycle_modules.json"))
     parser.add_argument("--target-db", type=Path, required=True)
     parser.add_argument("--cell-verilog", type=Path, required=True)
-    parser.add_argument("--modules", nargs="*", help="default: all manifest modules")
+    parser.add_argument(
+        "--modules",
+        nargs="*",
+        help="default: manifest modules whose default_characterize flag is true",
+    )
     parser.add_argument("--dc-shell", default="dc_shell")
     parser.add_argument("--vcs", default="vcs")
     parser.add_argument("--pt-shell", default="pt_shell")
@@ -32,10 +36,16 @@ def main() -> int:
     manifest_path = args.manifest if args.manifest.is_absolute() else root / args.manifest
     manifest: Dict[str, Any] = json.loads(manifest_path.read_text())
     available: Dict[str, Any] = manifest["modules"]
-    selected = args.modules or list(available)
+    selected = args.modules or [
+        name
+        for name, spec in available.items()
+        if bool(spec.get("default_characterize", True))
+    ]
     unknown = [name for name in selected if name not in available]
     if unknown:
         raise SystemExit(f"unknown PTPX modules: {', '.join(unknown)}")
+    if not selected:
+        raise SystemExit("no PTPX modules selected")
 
     target_db = args.target_db.resolve()
     cell_verilog = args.cell_verilog.resolve()
