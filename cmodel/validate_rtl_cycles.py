@@ -5,7 +5,7 @@ import argparse
 import json
 import re
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 
 PTOP_ACCEPT = re.compile(r"PTOP_ACCEPT\s+(\d+)")
@@ -48,8 +48,6 @@ def validate_bucket_pipe(log_dir: Path) -> Dict[str, int]:
         raise AssertionError("bucket pipeline reordered decisions")
     if outputs[0][0] - accepts[0][0] < 4:
         raise AssertionError("bucket decision appeared before the four-stage CD latency")
-    # Before the deliberate consumer stall, the source must sustain one accepted
-    # bucket per cycle.  This is the RTL calibration for bucket_issue_ii=1.
     consecutive = 1
     for (prev_cycle, _), (cycle, _) in zip(accepts, accepts[1:]):
         if cycle == prev_cycle + 1:
@@ -111,21 +109,21 @@ def main() -> int:
     sequence = validate_functional_sequence(args.log_dir, workload)
     stream = validate_stream_subsystem(args.log_dir)
 
-    if int(cycle_result["config"]["accelerator"]["bucket_issue_ii"]) != 1:
+    accelerator = cycle_result["config"]["accelerator"]
+    if int(accelerator["bucket_issue_ii"]) != 1:
         raise AssertionError("C-model bucket_issue_ii diverges from RTL II=1 trace")
-    expected_latency = int(
-        cycle_result["config"]["accelerator"]["merge_load_cycles"]
-    ) + 12 + int(cycle_result["config"]["accelerator"]["pe_row_latency"])
-    expected_latency += int(
-        cycle_result["config"]["accelerator"]["point_ctrl_overhead"]
+    row_latency = int(accelerator["pe_cols"]) * int(accelerator["pe_cell_latency"])
+    expected_latency = (
+        int(accelerator["merge_load_cycles"])
+        + 12
+        + row_latency
+        + int(accelerator["point_ctrl_overhead"])
     )
     if expected_latency != point["latency"]:
         raise AssertionError(
             f"C-model 48-point latency {expected_latency} != RTL {point['latency']}"
         )
     if cycle_result["sampled_indices"] != sequence[:-1]:
-        # A timing workload has one iteration per transition, so its sampled
-        # list excludes the terminal selected point.
         raise AssertionError("C-model iteration sequence diverges from RTL/workload")
 
     summary = {
