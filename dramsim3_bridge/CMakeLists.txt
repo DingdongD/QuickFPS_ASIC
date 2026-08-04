@@ -16,10 +16,25 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(dramsim3_external)
 
+# The upstream project uses directory-scoped relative include paths.  When it
+# is embedded through FetchContent those paths are not propagated reliably to
+# all generators, so attach the source directories explicitly to the official
+# target without modifying or vendoring its sources.
+target_include_directories(
+    dramsim3
+    PUBLIC
+        ${dramsim3_external_SOURCE_DIR}/src
+        ${dramsim3_external_SOURCE_DIR}/ext/headers
+)
+set_target_properties(dramsim3 PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 add_library(quickfps_dramsim3_bridge SHARED quickfps_dramsim3_bridge.cpp)
 target_link_libraries(quickfps_dramsim3_bridge PRIVATE dramsim3)
 target_include_directories(
-    quickfps_dramsim3_bridge PRIVATE ${dramsim3_external_SOURCE_DIR}/src
+    quickfps_dramsim3_bridge
+    PRIVATE
+        ${dramsim3_external_SOURCE_DIR}/src
+        ${dramsim3_external_SOURCE_DIR}/ext/headers
 )
 target_compile_features(quickfps_dramsim3_bridge PRIVATE cxx_std_17)
 target_compile_options(quickfps_dramsim3_bridge PRIVATE -Wall -Wextra -Wpedantic)
