@@ -1,0 +1,76 @@
+# QuickFPS large-top 1GHz 28nm status.
+run:
+  timestamp: "20260803_063034"
+  local_result_dir: "/home/PointAcc/QuickFPS/remote/remote_large_1ghz_20260803_063034"
+  remote_result_dir: "/home/xuliang/quickfps_large_1ghz_20260803_063034"
+  process: "TSMC28 HPC+ BWP40P140 SSG 0.81V 125C"
+  clock_period_ns: 1.0
+  dc_netlist: "DC compile_ultra mapped netlist, output load 0.005pF"
+  gate_sim: "VCS mapped-netlist gate simulation for point_engine"
+  ptpx_activity: "PrimeTime PX read_vcd/update_power for point_engine"
+strict_gate_vcd_ppa:
+  point_engine:
+    shape: "R=4, L=4, 16 PE"
+    gate_level_golden:
+      pass: true
+      row_cases: 48
+      row_observed: 48
+      row_mismatches: 0
+      row_max_abs: 5.7220458984375e-06
+      far_observed: 87
+      far_pass: true
+      far_max_abs: 1.9073486328125e-06
+    dc_1ghz:
+      cell_area: 135855.845090
+      comb_area: 105314.075639
+      seq_area: 30541.769451
+      cells: 178149
+      setup_slack_ns: 0.0000
+      hold_slack_ns: 0.0326
+      timing_clean_setup_hold: true
+      constraint_note: "only default max_leakage_power budget violation in DC constraints; setup/hold and PTPX constraints are clean"
+    gate_vcd_annotation:
+      nets_from_vcd: "100.00%"
+      not_annotated_nets: "0.00%"
+      total_nets: 192331
+    ptpx_gate_vcd_power:
+      internal_w: 0.0487
+      switching_w: 0.00347
+      leakage_w: 0.00222
+      total_w: 0.0544
+    ptpx_analysis_coverage:
+      setup: {total: 15680, met: 15324, violated: 0, untested: 356}
+      hold: {total: 15680, met: 15324, violated: 0, untested: 356}
+      removal: {total: 125, met: 0, violated: 0, untested: 125}
+      out_setup: {total: 220, met: 220, violated: 0, untested: 0}
+      out_hold: {total: 220, met: 220, violated: 0, untested: 0}
+      all_checks: {total: 93846, met: 92384, violated: 0, untested: 1462}
+dc_only_points:
+  point_engine_top:
+    reason_not_strict_power: "no gate-level workload VCD for full memory/top protocol"
+    cell_area: 138262.697105
+    comb_area: 107752.301617
+    seq_area: 30510.395489
+    cells: 179824
+    setup_slack_ns: 0.0000
+    hold_slack_ns: 0.0493
+    timing_clean_setup_hold: true
+    constraint_note: "only default max_leakage_power budget violation"
+  bucket_engine:
+    reason_not_clean_ppa: "DC has max_transition violations; no strict gate-level workload VCD"
+    cell_area: 32990.957831
+    comb_area: 21765.491979
+    seq_area: 11225.465852
+    cells: 39273
+    setup_slack_ns: 0.0000
+    hold_slack_ns: 0.0574
+    timing_clean_setup_hold: true
+    constraint_violations:
+      type: "max_transition"
+      count_lines_with_violated: 141
+      worst_slack_ns: -0.0087
+status:
+  large_top_strict_ppa_complete:
+    point_engine: true
+    point_engine_top: false
+    bucket_engine: false

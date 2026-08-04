@@ -1,0 +1,43 @@
+# Local planning and workspace state
+task_plan.md
+findings.md
+progress.md
+
+# Remote EDA transfers and mapped implementation artifacts
+remote/
+*.tgz
+*.tar.gz
+*.zip
+*.sdf
+*.ddc
+*.vcd
+*.saif
+*.fsdb
+*.spef
+*.sdc
+simv*
+csrc/
+work/
+work_*/
+outputs/
+outputs_*/
+activity/
+activity_*/
+
+# Local simulator and Python outputs
+*.vvp
+*.out
+*.log
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Keep only the current reproducibility summaries in reports/
+reports/*
+!reports/quickfps_golden_summary.txt
+!reports/quickfps_gate_1ghz_opt_strict_golden_20260803_052111.json
+!reports/quickfps_gate_1ghz_ppa_strict_20260803_052111.yaml
+!reports/point_engine_rtl_golden_check.json
+!reports/point_engine_gate_golden_20260803_063034.json
+!reports/point_engine_tb_reference.json
+!reports/quickfps_large_1ghz_ppa_20260803_063034.yaml

@@ -1,0 +1,17 @@
+{
+  "pe": {
+    "pass": true,
+    "cases": 96,
+    "observed": 96,
+    "mismatches": 0,
+    "max_abs": 1.1444091796875e-05
+  },
+  "bucket_cd": {
+    "pass": true,
+    "cases": 96,
+    "observed": 96,
+    "mismatches": 0,
+    "max_abs_dlb": 7.62939453125e-06,
+    "max_abs_d": 3.0517578125e-05
+  }
+}

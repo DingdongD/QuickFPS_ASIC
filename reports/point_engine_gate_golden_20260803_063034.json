@@ -1,0 +1,12 @@
+{
+  "point_engine": {
+    "pass": true,
+    "row_cases": 48,
+    "row_observed": 48,
+    "row_mismatches": 0,
+    "row_max_abs": 5.7220458984375e-06,
+    "far_observed": 87,
+    "far_pass": true,
+    "far_max_abs": 1.9073486328125e-06
+  }
+}

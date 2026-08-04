@@ -1,0 +1,90 @@
+# QuickFPS strict 1GHz post-synthesis gate-level VCD PTPX summary.
+run:
+  timestamp: "20260803_052111"
+  local_result_dir: "/home/PointAcc/QuickFPS/remote/remote_gate_1ghz_opt_strict_20260803_052111"
+  remote_result_dir: "/home/xuliang/quickfps_gate_1ghz_opt_strict_20260803_052111"
+  process: "TSMC28 HPC+ BWP40P140 SSG 0.81V 125C"
+  clock_period_ns: 1.0
+  dc_netlist: "DC compile_ultra mapped netlist, output load 0.005pF"
+  gate_sim: "VCS on mapped netlist with tcbn28hpcplusbwp40p140.v; VCD dumped from dut"
+  ptpx_activity: "PrimeTime PX read_vcd/update_power; nets annotated 100% from VCD"
+  reset_timing: "rst_n case-analyzed high in DC/PT functional timing"
+  valid_ppa_scope: "Only modules with gate-level golden pass and 100% net VCD annotation are listed below."
+modules:
+  pe:
+    gate_level_golden:
+      pass: true
+      cases: 96
+      observed: 96
+      mismatches: 0
+      max_abs: 1.1444091796875e-05
+    dc_1ghz:
+      cell_area: 8866.745946
+      comb_area: 6759.899974
+      seq_area: 2106.845972
+      cells: 11442
+      setup_slack_ns: 0.0
+      hold_slack_ns: 0.0326
+      timing_clean_setup_hold: true
+      constraint_note: 'max_leakage_power default report only; setup/hold reports are clean'
+    gate_vcd_annotation:
+      nets_from_vcd: "100.00%"
+      not_annotated_nets: "0.00%"
+      leaf_cells_line: "not_reported_by_pt_switching_activity"
+    ptpx_gate_vcd_power:
+      internal_w: 0.00623
+      switching_w: 0.00185
+      leakage_w: 0.000146
+      total_w: 0.00823
+    ptpx_analysis_coverage:
+      setup: {total: 1194, met: 1076, violated: 0, untested: 118}
+      hold: {total: 1194, met: 1076, violated: 0, untested: 118}
+      removal: {total: 5, met: 0, violated: 0, untested: 5}
+      out_setup: {total: 140, met: 140, violated: 0, untested: 0}
+      out_hold: {total: 140, met: 140, violated: 0, untested: 0}
+      all_checks: {total: 7026, met: 6736, violated: 0, untested: 290}
+    cycle_model:
+      ii_cycles: 1
+      outputs_observed: 96
+      workload_cases: 96
+  bucket_cd:
+    gate_level_golden:
+      pass: true
+      cases: 96
+      observed: 96
+      mismatches: 0
+      max_abs_dlb: 7.62939453125e-06
+      max_abs_d: 3.0517578125e-05
+    dc_1ghz:
+      cell_area: 17394.425894
+      comb_area: 15101.099945
+      seq_area: 2293.325949
+      cells: 24329
+      setup_slack_ns: 0.0001
+      hold_slack_ns: 0.0326
+      timing_clean_setup_hold: true
+      constraint_note: 'max_leakage_power default report only; setup/hold reports are clean'
+    gate_vcd_annotation:
+      nets_from_vcd: "100.00%"
+      not_annotated_nets: "0.00%"
+      leaf_cells_line: "not_reported_by_pt_switching_activity"
+    ptpx_gate_vcd_power:
+      internal_w: 0.00887
+      switching_w: 0.00435
+      leakage_w: 0.000284
+      total_w: 0.0135
+    ptpx_analysis_coverage:
+      setup: {total: 1954, met: 1026, violated: 0, untested: 928}
+      hold: {total: 1954, met: 1026, violated: 0, untested: 928}
+      removal: {total: 4, met: 0, violated: 0, untested: 4}
+      out_setup: {total: 181, met: 179, violated: 0, untested: 2}
+      out_hold: {total: 181, met: 179, violated: 0, untested: 2}
+      all_checks: {total: 8398, met: 6514, violated: 0, untested: 1884}
+    cycle_model:
+      ii_cycles: 1
+      outputs_observed: 96
+      workload_cases: 96
+excluded_points:
+  point_engine: "not run in this strict batch; large top should be handled by separate hierarchical or overnight run"
+  point_engine_top: "not run in this strict batch"
+  bucket_engine: "not run in this strict batch"
