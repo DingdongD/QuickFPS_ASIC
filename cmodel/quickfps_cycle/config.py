@@ -23,6 +23,7 @@ class AcceleratorConfig:
     dma_max_burst_beats: int = 16
     dma_channels: int = 4
     dma_command_cycles: int = 2
+    dram_transaction_bytes: int = 64
     sram_read_latency: int = 1
     sram_write_latency: int = 1
     max_cycles: int = 100_000_000
@@ -30,6 +31,10 @@ class AcceleratorConfig:
     @property
     def pe_row_latency(self) -> int:
         return self.pe_cols * self.pe_cell_latency
+
+    @property
+    def dma_max_burst_bytes(self) -> int:
+        return self.dma_bus_bytes * self.dma_max_burst_beats
 
     def validate(self) -> None:
         positive = {
@@ -41,10 +46,18 @@ class AcceleratorConfig:
             "pe_rows": self.pe_rows,
             "pe_cols": self.pe_cols,
             "pe_cell_latency": self.pe_cell_latency,
+            "merge_load_cycles": self.merge_load_cycles,
+            "point_ctrl_overhead": self.point_ctrl_overhead,
             "chunk_points": self.chunk_points,
+            "coord_bytes_per_point": self.coord_bytes_per_point,
+            "dist_bytes_per_point": self.dist_bytes_per_point,
             "dma_bus_bytes": self.dma_bus_bytes,
             "dma_max_burst_beats": self.dma_max_burst_beats,
             "dma_channels": self.dma_channels,
+            "dma_command_cycles": self.dma_command_cycles,
+            "dram_transaction_bytes": self.dram_transaction_bytes,
+            "sram_read_latency": self.sram_read_latency,
+            "sram_write_latency": self.sram_write_latency,
             "max_cycles": self.max_cycles,
         }
         for name, value in positive.items():
@@ -52,9 +65,18 @@ class AcceleratorConfig:
                 raise ValueError(f"{name} must be positive, got {value}")
         if self.pe_rows != 4 or self.pe_cols != 4:
             raise ValueError("the validated QuickFPS datapath is fixed to a 4x4 PE array")
+        if self.dma_bus_bytes & (self.dma_bus_bytes - 1):
+            raise ValueError("dma_bus_bytes must be a power of two")
+        if self.dram_transaction_bytes & (self.dram_transaction_bytes - 1):
+            raise ValueError("dram_transaction_bytes must be a power of two")
+        if self.dram_transaction_bytes > self.dma_max_burst_bytes:
+            raise ValueError("one DRAM transaction cannot exceed the configured AXI burst")
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        value = asdict(self)
+        value["pe_row_latency"] = self.pe_row_latency
+        value["dma_max_burst_bytes"] = self.dma_max_burst_bytes
+        return value
 
 
 @dataclass(frozen=True)
@@ -77,6 +99,8 @@ class DramConfig:
                 continue
             if not isinstance(value, int) or value <= 0:
                 raise ValueError(f"{name} must be positive, got {value}")
+        if self.burst_bytes & (self.burst_bytes - 1):
+            raise ValueError("burst_bytes must be a power of two")
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
