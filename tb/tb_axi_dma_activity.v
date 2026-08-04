@@ -18,23 +18,24 @@ module tb_axi_dma_activity;
     wire [7:0] arlen;
     wire [2:0] arsize;
     wire [1:0] arburst;
-    reg rvalid = 1'b0;
+    wire rvalid;
     wire rready;
-    reg [DATA_W-1:0] rdata = {DATA_W{1'b0}};
-    reg rlast = 1'b0;
+    wire [DATA_W-1:0] rdata;
+    wire rlast;
     wire out_valid;
     reg out_ready = 1'b1;
     wire [DATA_W-1:0] out_data;
     wire out_last;
     wire [31:0] rd_bytes;
     integer rd_beats_left = 0;
+    reg rd_complete_seen = 1'b0;
 
     reg wr_cmd_valid = 1'b0;
     wire wr_cmd_ready;
     wire wr_done, wr_busy;
     reg in_valid = 1'b1;
     wire in_ready;
-    reg [DATA_W-1:0] in_data = {DATA_W{1'b0}};
+    wire [DATA_W-1:0] in_data;
     wire awvalid;
     reg awready = 1'b1;
     wire [ADDR_W-1:0] awaddr;
@@ -49,6 +50,12 @@ module tb_axi_dma_activity;
     reg bvalid = 1'b0;
     wire bready;
     wire [31:0] wr_bytes;
+    reg wr_complete_seen = 1'b0;
+
+    assign rvalid = rd_beats_left > 0;
+    assign rlast = rd_beats_left == 1;
+    assign rdata = {8{lfsr}};
+    assign in_data = {8{lfsr ^ 32'h55aa_33cc}};
 
     axi_burst_reader #(
         .ADDR_W(ADDR_W), .DATA_W(DATA_W), .MAX_BURST_BEATS(16)
@@ -87,23 +94,15 @@ module tb_axi_dma_activity;
     always @(posedge clk) begin
         cycle <= cycle + 1;
         lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
-        rdata <= {8{lfsr}};
-        in_data <= {8{lfsr ^ 32'h55aa_33cc}};
         out_ready <= (cycle % 7 != 0);
         wready <= (cycle % 5 != 0);
 
         if (arvalid && arready) begin
-            if (rd_beats_left != 0) $fatal(1, "reader issued overlapping burst");
+            if (rd_beats_left != 0)
+                $fatal(1, "reader issued overlapping burst");
             rd_beats_left <= arlen + 1;
-        end
-        if (rd_beats_left > 0) begin
-            rvalid <= 1'b1;
-            rlast <= (rd_beats_left == 1);
-            if (rvalid && rready)
-                rd_beats_left <= rd_beats_left - 1;
-        end else begin
-            rvalid <= 1'b0;
-            rlast <= 1'b0;
+        end else if (rvalid && rready) begin
+            rd_beats_left <= rd_beats_left - 1;
         end
 
         if (wvalid && wready && wlast)
@@ -111,7 +110,13 @@ module tb_axi_dma_activity;
         if (bvalid && bready)
             bvalid <= 1'b0;
 
-        if (rd_done && wr_done) begin
+        if (rd_done)
+            rd_complete_seen <= 1'b1;
+        if (wr_done)
+            wr_complete_seen <= 1'b1;
+
+        if ((rd_complete_seen || rd_done) &&
+            (wr_complete_seen || wr_done)) begin
             if (rd_bytes != 32'd1600 || wr_bytes != 32'd1000)
                 $fatal(1, "DMA byte counter mismatch");
             $display("AXI_DMA_PASS cycles=%0d", cycle);
