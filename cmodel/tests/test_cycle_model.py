@@ -56,8 +56,21 @@ class SystemTimingTest(unittest.TestCase):
         self.assertEqual(result.counters["bucket_completions"], 6)
         self.assertEqual(result.counters["iterations_completed"], 2)
         self.assertEqual(result.counters["chunks_completed"], 12)
-        self.assertGreater(result.counters["dma_transactions"], 0)
+        self.assertGreater(result.counters["dram_transactions"], 0)
+        self.assertGreater(result.counters["axi_bursts"], 0)
+        self.assertGreater(result.counters["dram_transactions"], result.counters["axi_bursts"])
         self.assertEqual(result.memory_stats["accepted"], result.memory_stats["completed"])
+
+    def test_axi_and_dram_granularities_are_separate(self) -> None:
+        workload = synthetic_workload([300], iterations=1, issue_all=True)
+        config = AcceleratorConfig(chunk_points=300, max_cycles=500_000)
+        result = QuickFPSCycleModel(workload, accelerator=config).run()
+        # 300 points: 3600 B coordinates, 1200 B MDT read, 1200 B MDT write.
+        # At 512 B maximum AXI bursts this is 8 + 3 + 3 commands, while 64 B
+        # DRAM transactions cover 57 + 19 + 19 cache-line ranges.
+        self.assertEqual(result.counters["axi_bursts"], 14)
+        self.assertEqual(result.counters["dram_transactions"], 95)
+        self.assertEqual(result.counters["dma_commands"], 3)
 
 
 if __name__ == "__main__":
