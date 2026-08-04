@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .config import AcceleratorConfig, DramConfig
+from .memory import DramSim3Backend
 from .model import QuickFPSCycleModel
 from .power import PTPXEnergyModel
 from .workload import Workload, synthetic_workload
@@ -25,6 +26,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dram-banks", type=int, default=16)
     parser.add_argument("--dram-queue-depth", type=int, default=32)
     parser.add_argument("--clock-hz", type=int, default=1_000_000_000)
+    parser.add_argument("--dramsim3-lib", type=Path)
+    parser.add_argument("--dramsim3-config", type=Path)
+    parser.add_argument("--dramsim3-output-dir", type=Path, default=Path("build/dramsim3_stats"))
     parser.add_argument("--ptpx-energy", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--no-events", action="store_true")
@@ -51,13 +55,27 @@ def main() -> int:
         banks_per_channel=args.dram_banks,
         queue_depth=args.dram_queue_depth,
     )
+
+    memory_backend = None
+    if args.dramsim3_lib or args.dramsim3_config:
+        if not args.dramsim3_lib or not args.dramsim3_config:
+            raise SystemExit("--dramsim3-lib and --dramsim3-config must be supplied together")
+        args.dramsim3_output_dir.mkdir(parents=True, exist_ok=True)
+        memory_backend = DramSim3Backend(
+            args.dramsim3_lib,
+            args.dramsim3_config,
+            args.dramsim3_output_dir,
+        )
+
     result = QuickFPSCycleModel(
         workload,
         accelerator=accelerator,
         dram=dram,
+        memory_backend=memory_backend,
         trace_events=not args.no_events,
     ).run()
     output = result.to_dict(include_events=not args.no_events)
+    output["memory_backend"] = "dramsim3" if memory_backend else "analytical"
     if args.ptpx_energy:
         output["energy"] = PTPXEnergyModel.load(args.ptpx_energy).estimate(
             result.counters, result.cycles
@@ -66,8 +84,11 @@ def main() -> int:
     args.output.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n")
     print(
         f"cycles={result.cycles} seconds={result.seconds:.9f} "
-        f"dma_transactions={result.counters.get('dma_transactions', 0)}"
+        f"dma_transactions={result.counters.get('dma_transactions', 0)} "
+        f"backend={output['memory_backend']}"
     )
+    if memory_backend is not None:
+        memory_backend.close()
     return 0
 
 
