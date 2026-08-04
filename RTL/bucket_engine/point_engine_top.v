@@ -88,7 +88,9 @@ module point_engine_top #(
                           {L{1'b0}};
 
     wire streaming = (st == T_STREAM) && (in_batch < r_nbatch);
-    wire [NUMP_W:0] batch_base_ext = {1'b0, in_batch} * R;
+    // Address generation must use PIDX_W rather than NUMP_W: the local point
+    // count may be 16 bits while the reordered global point address is 18 bits.
+    wire [PIDX_W:0] batch_base_ext = in_batch * R;
     wire [PIDX_W-1:0] stream_addr =
         r_base + batch_base_ext[PIDX_W-1:0];
     wire [PIDX_W-1:0] far_word_base =
@@ -100,14 +102,14 @@ module point_engine_top #(
     genvar g;
     generate
         for (g = 0; g < R; g = g + 1) begin : g_lane
-            wire [NUMP_W:0] lane_pos = batch_base_ext + g;
+            wire [PIDX_W:0] lane_pos = batch_base_ext + g;
             assign in_idx[g*LIDX_W +: LIDX_W] = lane_pos[LIDX_W-1:0];
             assign in_x[g*32 +: 32] = co_rdata[g*96      +: 32];
             assign in_y[g*32 +: 32] = co_rdata[g*96 + 32 +: 32];
             assign in_z[g*32 +: 32] = co_rdata[g*96 + 64 +: 32];
             assign in_dist[g*32 +: 32] = di_rdata[g*32 +: 32];
             assign in_valid[g] = streaming &&
-                                 (lane_pos < {1'b0, r_nump});
+                                 (lane_pos < {{(PIDX_W+1-NUMP_W){1'b0}}, r_nump});
         end
     endgenerate
 
@@ -247,6 +249,8 @@ module point_engine_top #(
             $fatal(1, "point_engine_top: R must be a power of two");
         if (L > 16)
             $fatal(1, "point_engine_top: merge loader supports L<=16");
+        if (PIDX_W + 1 < NUMP_W)
+            $fatal(1, "point_engine_top: PIDX_W must cover NUMP_W");
     end
     // synopsys translate_on
 endmodule
