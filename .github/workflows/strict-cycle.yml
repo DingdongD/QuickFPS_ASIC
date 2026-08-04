@@ -1,0 +1,41 @@
+name: Strict Cycle Scheduler
+
+on:
+  push:
+    branches:
+      - feature/cycle-accurate-system
+  pull_request:
+
+jobs:
+  strict-cycle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run all Python timing and energy tests
+        env:
+          PYTHONPATH: cmodel
+        run: python3 -m unittest discover -s cmodel/tests -v
+
+      - name: Run public edge-accurate CLI
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          python3 -m quickfps_cycle \
+            --synthetic-buckets 300,129,17 \
+            --iterations 2 \
+            --chunk-points 128 \
+            --bucket-decision-fifo-depth 4 \
+            --bucket-fifo-depth 2 \
+            --far-fifo-depth 2 \
+            --output build/strict_cycle_result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('build/strict_cycle_result.json').read_text())
+          assert result['config']['scheduler'] == 'strict-pre-edge'
+          assert result['cycles'] > 0
+          assert result['counters']['bucket_reserved_credit_max'] <= 4
+          assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
+          assert result['memory_stats']['accepted'] == result['memory_stats']['completed']
+          PY
