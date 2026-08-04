@@ -14,9 +14,9 @@ module tb_bucket_decision_activity;
     reg rst_n=1'b0;
     reg in_valid=1'b0;
     wire in_ready;
-    reg [BIDX_W-1:0] in_bid=0;
+    wire [BIDX_W-1:0] in_bid;
     reg [ENTRY_W-1:0] in_entry={ENTRY_W{1'b0}};
-    reg in_first_iter=1'b1;
+    wire in_first_iter;
     wire out_valid;
     reg out_ready=1'b1;
     wire [1:0] out_action;
@@ -28,6 +28,9 @@ module tb_bucket_decision_activity;
     integer sent=0;
     integer received=0;
     integer stalls=0;
+
+    assign in_bid = sent[BIDX_W-1:0];
+    assign in_first_iter = sent < 32;
 
     bucket_decision_pipe dut (
         .clk(clk), .rst_n(rst_n),
@@ -53,17 +56,14 @@ module tb_bucket_decision_activity;
         in_entry[E_FY +:32] = 32'h3f000000;
         in_entry[E_FZ +:32] = 32'h3e800000;
         in_entry[E_FDIST +:32] = 32'h3f000000;
-        in_entry[E_FIDX +:PIDX_W] = in_bid;
+        in_entry[E_FIDX +:PIDX_W] = {{(PIDX_W-BIDX_W){1'b0}}, in_bid};
     end
 
     always @(posedge clk) begin
         cycle <= cycle + 1;
         out_ready <= (cycle % 9 != 0) && !(cycle >= 20 && cycle < 33);
-        if (rst_n) begin
+        if (rst_n)
             in_valid <= sent < 64;
-            in_bid <= sent[BIDX_W-1:0];
-            in_first_iter <= (sent < 32);
-        end
         if (in_valid && in_ready)
             sent <= sent + 1;
         else if (in_valid)
