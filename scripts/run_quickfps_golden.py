@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import random
+import re
 import struct
 import subprocess
 from pathlib import Path
@@ -322,6 +323,28 @@ def check_point_engine_top_cycles():
     }
 
 
+def check_bucket_engine_strict():
+    tb_path = TB / "tb_bucket_engine_gate.v"
+    exe = REPORTS / "tb_bucket_engine_gate.vvp"
+    comp = run(["iverilog", "-g2012", "-s", "tb_bucket_engine_gate",
+                "-o", str(exe)] + rtl_files() + [str(tb_path)])
+    if comp.returncode != 0:
+        return {"pass": False, "compile_log": comp.stdout}
+    sim = run(["vvp", str(exe)])
+    passed = sim.returncode == 0 and "BENG_STRICT_PASS" in sim.stdout
+    match = re.search(
+        r"BENG_STRICT_PASS\s+latency_cycles=(\d+)\s+requests=(\d+)\s+responses=(\d+)",
+        sim.stdout,
+    )
+    return {
+        "pass": passed,
+        "latency_cycles": int(match.group(1)) if match else None,
+        "requests": int(match.group(2)) if match else None,
+        "responses": int(match.group(3)) if match else None,
+        "sim_log": sim.stdout,
+    }
+
+
 def main():
     REPORTS.mkdir(parents=True, exist_ok=True)
     results = {
@@ -329,6 +352,7 @@ def main():
         "bucket_cd": check_bucket_cd(),
         "pe": check_pe(),
         "point_engine_top_cycles": check_point_engine_top_cycles(),
+        "bucket_engine_strict": check_bucket_engine_strict(),
     }
     out = ROOT / "reports" / "quickfps_golden_summary.txt"
     lines = []

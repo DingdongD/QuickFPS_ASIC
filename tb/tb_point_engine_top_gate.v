@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-module tb_point_engine_top_cycle;
+module tb_point_engine_top_gate;
     localparam L = 4;
     localparam R = 4;
     localparam BIDX_W = 9;
@@ -16,7 +16,7 @@ module tb_point_engine_top_cycle;
         PASSES * ((NUM_POINTS / R) + (6 * L)) + 2;
 
     reg clk = 1'b0;
-    always #5 clk = ~clk;
+    always #0.5 clk = ~clk;
 
     reg rst_n = 1'b0;
     reg bkt_empty = 1'b1;
@@ -70,11 +70,7 @@ module tb_point_engine_top_cycle;
             co_rdata[lane*96 +: 32] = fp_x(co_addr[3:0] + lane[3:0]);
     end
 
-    point_engine_top #(
-        .L(L), .R(R), .LIDX_W(11), .BIDX_W(BIDX_W),
-        .PIDX_W(PIDX_W), .NUMP_W(NUMP_W), .ADDR_W(ADDR_W),
-        .MCNT_W(MCNT_W), .BF_W(BF_W), .FP_W(FP_W)
-    ) dut (
+    point_engine_top dut (
         .clk(clk), .rst_n(rst_n),
         .bkt_empty(bkt_empty), .bkt_rdata(bkt_rdata), .bkt_ren(bkt_ren),
         .fp_full(fp_full), .fp_wen(fp_wen), .fp_wdata(fp_wdata),
@@ -113,6 +109,10 @@ module tb_point_engine_top_cycle;
     end
 
     initial begin
+        $dumpfile("activity_1ghz/point_engine_top_gate.vcd");
+        $dumpvars(0, tb_point_engine_top_gate.dut);
+    end
+initial begin
         repeat (3) @(posedge clk);
         rst_n <= 1'b1;
         @(posedge clk);

@@ -113,8 +113,24 @@ module point_engine_top #(
     );
 
     always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) st<=T_IDLE;
-        else begin
+        if (!rst_n) begin
+            st          <= T_IDLE;
+            r_bid       <= {BIDX_W{1'b0}};
+            r_base      <= {PIDX_W{1'b0}};
+            r_nump      <= {NUMP_W{1'b0}};
+            r_sx        <= 32'd0;
+            r_sy        <= 32'd0;
+            r_sz        <= 32'd0;
+            r_k         <= 8'd0;
+            r_npass     <= 8'd0;
+            pass        <= 8'd0;
+            r_nbatch    <= {NUMP_W{1'b0}};
+            c           <= 4'd0;
+            in_batch    <= {NUMP_W{1'b0}};
+            cap_batch   <= {NUMP_W{1'b0}};
+            fp_hold     <= {FP_W{1'b0}};
+            r_mcnt_ext  <= 8'd0;
+        end else begin
             case (st)
             T_IDLE: if (!bkt_empty) begin
                 r_bid<=bf_bid; r_base<=bf_ptr[PIDX_W-1:0]; r_nump<=bf_nump;

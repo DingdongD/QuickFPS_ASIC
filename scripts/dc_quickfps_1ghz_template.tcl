@@ -42,6 +42,8 @@ if {[sizeof_collection [get_ports -quiet clk]] > 0} {
     create_clock -name clk -period 1.0 [get_ports clk]
     if {[sizeof_collection [get_ports -quiet rst_n]] > 0} {
         set_case_analysis 1 [get_ports rst_n]
+        # Reset is implemented by a dedicated high-fanout reset tree after synthesis.
+        set_ideal_network -no_propagate [get_ports rst_n]
     }
     set_clock_uncertainty -setup 0.03 [get_clocks clk]
     set_clock_uncertainty -hold 0.00 [get_clocks clk]
@@ -55,6 +57,9 @@ if {[sizeof_collection [get_ports -quiet clk]] > 0} {
 }
 
 compile_ultra
+# Close residual library design-rule violations after timing/area optimization.
+# This pass is driven by library constraints, not by a fixed latency model.
+compile_ultra -incremental -only_design_rule
 
 write -format verilog -hierarchy -output "$OUTPUT_DIR/${TOP_NAME}_mapped.v"
 write_sdc "$OUTPUT_DIR/${TOP_NAME}.sdc"

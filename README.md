@@ -64,9 +64,20 @@ The checked-in current reports target TSMC 28 nm HPC+ at 1 GHz.
   tests (48 row results, zero mismatches).
 - `pe`, `bucket_cd`, and `point_engine` have gate-level VCD PTPX results with
   100% net annotation in the selected reports.
-- `point_engine_top` currently has DC area/timing only.
-- `bucket_engine` currently has DC area/timing only and retains max-transition
-  violations; it is not a strict PPA point.
+- `point_engine_top` and `bucket_engine` now have independent strict
+  post-synthesis gate-VCD PTPX points in
+  `reports/quickfps_strict_tops_1ghz_ppa_20260803_190839.yaml`.
+- `point_engine_top`: 38-cycle descriptor-to-push latency, 139604.09 total cell
+  area, 49.5 mW total PTPX power, 100% net annotation, and 99.872% fully
+  annotated leaf cells.
+- `bucket_engine`: 49-cycle start-to-done latency, 32899.99 total cell area,
+  18.8 mW total PTPX power, 100% net annotation, and 99.834% fully annotated
+  leaf cells.
+- Both strict tops pass mapped-netlist golden checks, DC/PTPX setup and hold,
+  physical design-rule checks, and 100% synthesis-invariant annotation. These
+  are zero-delay post-synthesis activity results, not post-layout signoff.
+- `point_engine_top` contains the complete 4x4 `point_engine`; their module
+  powers are alternative hierarchy measurements and must not be added.
 
 Run local golden tests with:
 
@@ -81,7 +92,14 @@ runtime, never stored in the repository:
 export QUICKFPS_REMOTE_HOST='<user>@<host>'
 export QUICKFPS_REMOTE_PORT='<ssh-port>'
 export QUICKFPS_REMOTE_PASS='<password>'
-bash scripts/run_remote_quickfps_gate_1ghz.sh
+bash scripts/run_remote_quickfps_strict_tops_1ghz_bg.sh
+```
+
+After the remote `DONE` marker appears, pull and collect the result with:
+
+```bash
+bash scripts/pull_quickfps_strict_tops_1ghz_results.sh <remote-run-directory>
+python3 scripts/collect_strict_top_ppa.py <local-result-directory> <output.yaml>
 ```
 
 `QUICKFPS_REMOTE_BASE` can override the default remote work base directory.

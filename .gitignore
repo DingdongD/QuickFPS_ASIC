@@ -41,3 +41,4 @@ reports/*
 !reports/point_engine_gate_golden_20260803_063034.json
 !reports/point_engine_tb_reference.json
 !reports/quickfps_large_1ghz_ppa_20260803_063034.yaml
+!reports/quickfps_strict_tops_1ghz_ppa_20260803_190839.yaml

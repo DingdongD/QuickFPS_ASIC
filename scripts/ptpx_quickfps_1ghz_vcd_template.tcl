@@ -20,6 +20,7 @@ link
 read_sdc "$OUTPUT_DIR/${TOP_NAME}.sdc"
 if {[sizeof_collection [get_ports -quiet rst_n]] > 0} {
     set_case_analysis 1 [get_ports rst_n]
+    set_ideal_network -no_propagate [get_ports rst_n]
 }
 if {[sizeof_collection [all_outputs]] > 0} {
     set_load 0.005 [all_outputs]
@@ -32,8 +33,10 @@ update_timing
 update_power
 report_analysis_coverage > "$REPORT_DIR/analysis_coverage.rpt"
 report_switching_activity -list_not_annotated > "$REPORT_DIR/not_annotated.rpt"
-report_timing -delay_type max -max_paths 20 -significant_digits 4 > "$REPORT_DIR/timing_setup.rpt"
-report_timing -delay_type min -max_paths 20 -significant_digits 4 > "$REPORT_DIR/timing_hold.rpt"
+report_timing -delay_type max -slack_lesser_than 1000000 \
+    -max_paths 20 -significant_digits 8 > "$REPORT_DIR/timing_setup.rpt"
+report_timing -delay_type min -slack_lesser_than 1000000 \
+    -max_paths 20 -significant_digits 8 > "$REPORT_DIR/timing_hold.rpt"
 report_constraint -all_violators -significant_digits 4 > "$REPORT_DIR/constraints.rpt"
 report_power -hierarchy > "$REPORT_DIR/power_ptpx_vcd.rpt"
 quit

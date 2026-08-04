@@ -1,0 +1,132 @@
+run:
+  result_root: remote/remote_strict_tops_1ghz_20260803_190839
+  process: TSMC28 HPC+ BWP40P140 SSG 0.81V 125C
+  clock_period_ns: 1.0
+  flow: DC mapped netlist -> gate-level VCS/VCD -> PTPX read_vcd/update_power
+  strict_policy:
+    gate_golden_required: true
+    net_vcd_annotation_pct: 100.0
+    minimum_fully_annotated_leaf_cells_pct: 99.8
+    setup_hold_and_physical_constraints_clean: true
+    timing_numeric_tolerance_ns: 1.0e-06
+    allowed_nonfatal_ptpx_messages:
+    - 'Error: Library Compiler executable path is not set. (PT-063)'
+strict_gate_vcd_ppa:
+  point_engine_top:
+    gate_level_golden:
+      push_cycle: 42
+      failure_markers: []
+      pass: true
+      expected_latency_cycles: 38
+      latency_cycles: 38
+    dc_1ghz:
+      cell_area: 139604.093035
+      comb_area: 108662.90361
+      seq_area: 30941.189425
+      cells: 180241
+      setup_slack_ns: 0.0
+      hold_slack_ns: 0.0535
+      physical_constraint_violations: []
+    gate_vcd_annotation:
+      annotated_nets: 194820
+      total_nets: 194820
+      nets_from_vcd_pct: 100.0
+      fully_annotated_leaf_cells: 179962
+      total_leaf_cells: 180193
+      fully_annotated_leaf_cells_pct: 99.871804
+      minimum_leaf_cells_pct: 99.8
+      annotated_synthesis_invariant_points: 17356
+      total_synthesis_invariant_points: 17356
+    ptpx_analysis_coverage:
+      setup:
+        total: 15759
+        met: 15524
+        violated: 0
+        untested: 235
+      hold:
+        total: 15759
+        met: 15524
+        violated: 0
+        untested: 235
+    ptpx_gate_vcd_power_w:
+      internal: 0.0461
+      switching: 0.00118
+      leakage: 0.00227
+      total: 0.0495
+    ptpx_timing:
+      setup_slack_ns: 3.43e-06
+      hold_slack_ns: 0.05354818
+    cycle_model:
+      latency_cycles: 38
+    strict_acceptance:
+      gate_level_golden_pass: true
+      all_nets_from_gate_vcd: true
+      all_synthesis_invariants_annotated: true
+      leaf_annotation_meets_threshold: true
+      dc_setup_hold_clean: true
+      ptpx_setup_hold_clean: true
+      no_physical_constraint_violations: true
+      power_report_present: true
+      setup_hold_coverage_has_no_violations: true
+      no_fatal_ptpx_errors: true
+  bucket_engine:
+    gate_level_golden:
+      latency_cycles: 49
+      responses: 7
+      expected_responses: 7
+      requests: 7
+      expected_requests: 7
+      pass: true
+    dc_1ghz:
+      cell_area: 32899.985856
+      comb_area: 21719.376001
+      seq_area: 11180.609854
+      cells: 39275
+      setup_slack_ns: 0.0
+      hold_slack_ns: 0.0574
+      physical_constraint_violations: []
+    gate_vcd_annotation:
+      annotated_nets: 41378
+      total_nets: 41378
+      nets_from_vcd_pct: 100.0
+      fully_annotated_leaf_cells: 39207
+      total_leaf_cells: 39272
+      fully_annotated_leaf_cells_pct: 99.834488
+      minimum_leaf_cells_pct: 99.8
+      annotated_synthesis_invariant_points: 6384
+      total_synthesis_invariant_points: 6384
+    ptpx_analysis_coverage:
+      setup:
+        total: 5837
+        met: 5836
+        violated: 0
+        untested: 1
+      hold:
+        total: 5837
+        met: 5836
+        violated: 0
+        untested: 1
+    ptpx_gate_vcd_power_w:
+      internal: 0.0171
+      switching: 0.00118
+      leakage: 0.000522
+      total: 0.0188
+    ptpx_timing:
+      setup_slack_ns: -1.0e-08
+      hold_slack_ns: 0.05741721
+    cycle_model:
+      latency_cycles: 49
+      requests: 7
+      responses: 7
+    strict_acceptance:
+      gate_level_golden_pass: true
+      all_nets_from_gate_vcd: true
+      all_synthesis_invariants_annotated: true
+      leaf_annotation_meets_threshold: true
+      dc_setup_hold_clean: true
+      ptpx_setup_hold_clean: true
+      no_physical_constraint_violations: true
+      power_report_present: true
+      setup_hold_coverage_has_no_violations: true
+      no_fatal_ptpx_errors: true
+excluded: {}
