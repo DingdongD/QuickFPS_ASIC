@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List
 
@@ -16,6 +17,7 @@ CORE_SEQUENCE = re.compile(r"CORE_E2E_PASS\s+sequence=([0-9,]+)")
 STREAM_PASS = re.compile(
     r"STREAM_SUBSYSTEM_PASS\s+cycles=(\d+)\s+c=(\d+)\s+d=(\d+)\s+w=(\d+)"
 )
+QTRACE = re.compile(r"^QTRACE\s+(.*)$", re.MULTILINE)
 
 
 def text(path: Path) -> str:
@@ -64,6 +66,82 @@ def validate_bucket_pipe(log_dir: Path) -> Dict[str, int]:
     }
 
 
+def parse_qtrace(content: str) -> List[Dict[str, str]]:
+    events = []
+    for match in QTRACE.finditer(content):
+        fields: Dict[str, str] = {}
+        for token in match.group(1).split():
+            if "=" not in token:
+                continue
+            key, value = token.split("=", 1)
+            fields[key] = value
+        if "cycle" not in fields or "event" not in fields:
+            raise AssertionError(f"malformed QTRACE line: {match.group(0)}")
+        events.append(fields)
+    return events
+
+
+def validate_pingpong_trace(log_dir: Path) -> Dict[str, object]:
+    content = text(log_dir / "tb_pingpong_chunk_ctrl.log")
+    events = parse_qtrace(content)
+    by_event: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+    for event in events:
+        if event.get("component") == "pingpong":
+            by_event[event["event"]].append(event)
+    required = [
+        "coord_cmd",
+        "coord_done",
+        "dist_read_cmd",
+        "dist_read_done",
+        "compute_start",
+        "compute_done",
+        "dist_write_cmd",
+        "dist_write_done",
+    ]
+    for name in required:
+        chunks = [int(event["chunk"]) for event in by_event[name]]
+        if chunks != [0, 1, 2]:
+            raise AssertionError(f"ping-pong {name} chunks are {chunks}, expected [0,1,2]")
+    slots = [int(event["slot"]) for event in by_event["compute_start"]]
+    if slots != [0, 1, 0]:
+        raise AssertionError(f"ping-pong slot order changed: {slots}")
+
+    cycle_by_event = {
+        name: {int(event["chunk"]): int(event["cycle"]) for event in by_event[name]}
+        for name in required
+    }
+    for chunk in range(3):
+        read_complete = max(
+            cycle_by_event["coord_done"][chunk],
+            cycle_by_event["dist_read_done"][chunk],
+        )
+        compute_start = cycle_by_event["compute_start"][chunk]
+        compute_done = cycle_by_event["compute_done"][chunk]
+        write_start = cycle_by_event["dist_write_cmd"][chunk]
+        write_done = cycle_by_event["dist_write_done"][chunk]
+        if compute_start <= read_complete:
+            raise AssertionError(f"chunk {chunk} compute started before both reads completed")
+        if compute_done <= compute_start:
+            raise AssertionError(f"chunk {chunk} compute completion is not causal")
+        if write_start <= compute_done:
+            raise AssertionError(f"chunk {chunk} write started before compute completion")
+        if write_done <= write_start:
+            raise AssertionError(f"chunk {chunk} write completion is not causal")
+
+    bucket_done = by_event.get("bucket_done", [])
+    if len(bucket_done) != 1:
+        raise AssertionError("expected one ping-pong bucket_done event")
+    done_cycle = int(bucket_done[0]["cycle"])
+    if done_cycle <= max(cycle_by_event["dist_write_done"].values()):
+        raise AssertionError("bucket completed before the final MDT write response")
+    return {
+        "chunks": 3,
+        "slot_order": slots,
+        "bucket_done_cycle": done_cycle,
+        "events": len(events),
+    }
+
+
 def validate_functional_sequence(log_dir: Path, workload: Dict[str, object]) -> List[int]:
     content = text(log_dir / "tb_quickfps_core_end2end.log")
     match = CORE_SEQUENCE.search(content)
@@ -106,6 +184,7 @@ def main() -> int:
     cycle_result = json.loads(args.cycle_result.read_text())
     point = validate_point_engine(args.log_dir)
     bucket = validate_bucket_pipe(args.log_dir)
+    pingpong = validate_pingpong_trace(args.log_dir)
     sequence = validate_functional_sequence(args.log_dir, workload)
     stream = validate_stream_subsystem(args.log_dir)
 
@@ -129,6 +208,7 @@ def main() -> int:
     summary = {
         "point_engine": point,
         "bucket_decision_pipe": bucket,
+        "pingpong_chunk_ctrl": pingpong,
         "stream_subsystem": stream,
         "rtl_sequence": sequence,
         "cycle_model_cycles": int(cycle_result["cycles"]),
