@@ -13,7 +13,7 @@ class PointEngineTimingTest(unittest.TestCase):
     def test_existing_48_point_latency(self) -> None:
         config = AcceleratorConfig()
         self.assertEqual(
-            _PointEngineSystem.rtl_point_engine_latency(48, 3, config), 38
+            _PointEngineSystem.rtl_point_engine_latency(48, 3, config), 39
         )
 
     def test_partial_batch_increases_by_one_batch(self) -> None:

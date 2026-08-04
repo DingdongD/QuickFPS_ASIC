@@ -112,7 +112,7 @@ class _PointEngineSystem:
 
         This mirrors ``point_engine_top``: L cycles to load a pass, one point
         batch per cycle, a chain of L five-cycle PEs, then COLLECT and PUSH.
-        For R=4, L=4, 48 points, and merge_count=3 the result is 38 cycles,
+        For R=4, L=4, 48 points, and merge_count=3 the result is 39 cycles,
         matching ``tb_point_engine_top_cycle.v``.
         """
         if point_count <= 0:
@@ -121,7 +121,7 @@ class _PointEngineSystem:
         passes = math.ceil((merge_count + 1) / config.pe_cols)
         return passes * (
             config.merge_load_cycles + batches + config.pe_row_latency
-        ) + config.point_ctrl_overhead
+        ) + config.point_ctrl_overhead + config.point_io_pipeline_cycles
 
     def can_enqueue_bucket(self) -> bool:
         return len(self.bucket_fifo) < self.config.bucket_fifo_depth

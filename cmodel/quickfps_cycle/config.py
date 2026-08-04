@@ -17,6 +17,7 @@ class AcceleratorConfig:
     pe_cell_latency: int = 5
     merge_load_cycles: int = 4
     point_ctrl_overhead: int = 2
+    point_io_pipeline_cycles: int = 1
     chunk_points: int = 256
     coord_bytes_per_point: int = 12
     dist_bytes_per_point: int = 4
@@ -50,6 +51,7 @@ class AcceleratorConfig:
             "pe_cell_latency": self.pe_cell_latency,
             "merge_load_cycles": self.merge_load_cycles,
             "point_ctrl_overhead": self.point_ctrl_overhead,
+            "point_io_pipeline_cycles": self.point_io_pipeline_cycles,
             "chunk_points": self.chunk_points,
             "coord_bytes_per_point": self.coord_bytes_per_point,
             "dist_bytes_per_point": self.dist_bytes_per_point,
@@ -67,6 +69,8 @@ class AcceleratorConfig:
                 raise ValueError(f"{name} must be positive, got {value}")
         if self.pe_rows != 4 or self.pe_cols != 4:
             raise ValueError("the validated QuickFPS datapath is fixed to a 4x4 PE array")
+        if self.point_io_pipeline_cycles != 1:
+            raise ValueError("the validated Point-Engine memory interface has one pipeline stage")
         if self.bucket_decision_fifo_depth < self.bucket_cd_latency:
             raise ValueError(
                 "bucket_decision_fifo_depth must cover all in-flight CD outputs"

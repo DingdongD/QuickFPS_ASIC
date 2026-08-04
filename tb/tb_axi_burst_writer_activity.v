@@ -26,6 +26,8 @@ module tb_axi_burst_writer_activity;
     wire [31:0] bytes_completed;
     integer cycle = 0;
     reg [31:0] lfsr = 32'h2468_ace1;
+    reg wlast_fire_q = 1'b0;
+    reg b_fire_q = 1'b0;
 
     axi_burst_writer dut (
         .clk(clk), .rst_n(rst_n),
@@ -44,13 +46,8 @@ module tb_axi_burst_writer_activity;
 
     always @(posedge clk) begin
         cycle <= cycle + 1;
-        lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
-        in_data <= {8{lfsr}};
-        wready <= (cycle % 5 != 0);
-        if (wvalid && wready && wlast)
-            bvalid <= 1'b1;
-        if (bvalid && bready)
-            bvalid <= 1'b0;
+        wlast_fire_q <= wvalid && wready && wlast;
+        b_fire_q <= bvalid && bready;
         if (done) begin
             if (bytes_completed != 32'd1000)
                 $fatal(1, "writer byte count mismatch");
@@ -59,14 +56,24 @@ module tb_axi_burst_writer_activity;
         end
     end
 
+    always @(negedge clk) begin
+        lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
+        in_data <= {8{lfsr}};
+        wready <= (cycle % 5 != 0);
+        if (wlast_fire_q)
+            bvalid <= 1'b1;
+        if (b_fire_q)
+            bvalid <= 1'b0;
+    end
+
     initial begin
         $dumpfile("build/activity/axi_burst_writer.vcd");
         $dumpvars(0, tb_axi_burst_writer_activity.dut);
-        repeat (5) @(posedge clk);
+        repeat (5) @(negedge clk);
         rst_n <= 1'b1;
-        @(posedge clk);
+        @(negedge clk);
         cmd_valid <= 1'b1;
-        @(posedge clk);
+        @(negedge clk);
         cmd_valid <= 1'b0;
         repeat (2000) @(posedge clk);
         $fatal(1, "writer timeout");

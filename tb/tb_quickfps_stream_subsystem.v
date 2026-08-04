@@ -49,6 +49,12 @@ module tb_quickfps_stream_subsystem;
     integer compute_count=0, compute_timer=-1;
     integer cycle=0;
     reg [31:0] lfsr=32'h7654_3211;
+    reg c_ar_fire_q=1'b0, c_r_fire_q=1'b0;
+    reg d_ar_fire_q=1'b0, d_r_fire_q=1'b0;
+    reg w_aw_fire_q=1'b0, wlast_fire_q=1'b0, w_b_fire_q=1'b0;
+    reg compute_fire_q=1'b0;
+    reg [7:0] c_arlen_q=8'd0, d_arlen_q=8'd0;
+    reg [7:0] compute_merge_count_q=8'd0;
 
     assign c_rvalid = c_beats > 0;
     assign c_rlast = c_beats == 1;
@@ -96,38 +102,18 @@ module tb_quickfps_stream_subsystem;
 
     always @(posedge clk) begin
         cycle <= cycle + 1;
-        lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
-        write_stream_data <= {8{lfsr ^ 32'h0f0f_f0f0}};
-        coord_stream_ready <= (cycle % 11 != 0);
-        dist_stream_ready <= (cycle % 13 != 0);
-        w_wready <= (cycle % 7 != 0);
-        compute_done <= 1'b0;
-
-        if (c_arvalid && c_arready) begin
-            if (c_beats != 0) $fatal(1, "coordinate AXI overlap");
-            c_beats <= c_arlen + 1;
-            c_bursts <= c_bursts + 1;
-        end else if (c_rvalid && c_rready) c_beats <= c_beats - 1;
-
-        if (d_arvalid && d_arready) begin
-            if (d_beats != 0) $fatal(1, "distance AXI overlap");
-            d_beats <= d_arlen + 1;
-            d_bursts <= d_bursts + 1;
-        end else if (d_rvalid && d_rready) d_beats <= d_beats - 1;
-
-        if (w_awvalid && w_awready) w_bursts <= w_bursts + 1;
-        if (w_wvalid && w_wready && w_wlast) w_bvalid <= 1'b1;
-        if (w_bvalid && w_bready) w_bvalid <= 1'b0;
-
-        if (compute_start && compute_ready) begin
-            if (compute_timer >= 0) $fatal(1, "compute overlap");
-            compute_timer <= 12;
-            compute_count <= compute_count + 1;
-            if (compute_merge_count != 8'd3) $fatal(1, "merge count mismatch");
-        end else if (compute_timer == 0) begin
-            compute_done <= 1'b1;
-            compute_timer <= -1;
-        end else if (compute_timer > 0) compute_timer <= compute_timer - 1;
+        c_ar_fire_q <= c_arvalid && c_arready;
+        c_r_fire_q <= c_rvalid && c_rready;
+        d_ar_fire_q <= d_arvalid && d_arready;
+        d_r_fire_q <= d_rvalid && d_rready;
+        w_aw_fire_q <= w_awvalid && w_awready;
+        wlast_fire_q <= w_wvalid && w_wready && w_wlast;
+        w_b_fire_q <= w_bvalid && w_bready;
+        compute_fire_q <= compute_start && compute_ready;
+        if (c_arvalid && c_arready) c_arlen_q <= c_arlen;
+        if (d_arvalid && d_arready) d_arlen_q <= d_arlen;
+        if (compute_start && compute_ready)
+            compute_merge_count_q <= compute_merge_count;
 
         if (bucket_done) begin
             if (compute_count != 2)
@@ -140,14 +126,50 @@ module tb_quickfps_stream_subsystem;
         end
     end
 
+    always @(negedge clk) begin
+        lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
+        write_stream_data <= {8{lfsr ^ 32'h0f0f_f0f0}};
+        coord_stream_ready <= (cycle % 11 != 0);
+        dist_stream_ready <= (cycle % 13 != 0);
+        w_wready <= (cycle % 7 != 0);
+        compute_done <= 1'b0;
+
+        if (c_ar_fire_q) begin
+            if (c_beats != 0) $fatal(1, "coordinate AXI overlap");
+            c_beats <= c_arlen_q + 1;
+            c_bursts <= c_bursts + 1;
+        end else if (c_r_fire_q) c_beats <= c_beats - 1;
+
+        if (d_ar_fire_q) begin
+            if (d_beats != 0) $fatal(1, "distance AXI overlap");
+            d_beats <= d_arlen_q + 1;
+            d_bursts <= d_bursts + 1;
+        end else if (d_r_fire_q) d_beats <= d_beats - 1;
+
+        if (w_aw_fire_q) w_bursts <= w_bursts + 1;
+        if (wlast_fire_q) w_bvalid <= 1'b1;
+        if (w_b_fire_q) w_bvalid <= 1'b0;
+
+        if (compute_fire_q) begin
+            if (compute_timer >= 0) $fatal(1, "compute overlap");
+            compute_timer <= 12;
+            compute_count <= compute_count + 1;
+            if (compute_merge_count_q != 8'd3) $fatal(1, "merge count mismatch");
+        end else if (compute_timer == 0) begin
+            compute_done <= 1'b1;
+            compute_timer <= -1;
+        end else if (compute_timer > 0) compute_timer <= compute_timer - 1;
+
+    end
+
     initial begin
         $dumpfile("build/activity/quickfps_stream_subsystem.vcd");
         $dumpvars(0, tb_quickfps_stream_subsystem.dut);
-        repeat (5) @(posedge clk);
+        repeat (5) @(negedge clk);
         rst_n <= 1'b1;
-        @(posedge clk);
+        @(negedge clk);
         bucket_valid <= 1'b1;
-        @(posedge clk);
+        @(negedge clk);
         bucket_valid <= 1'b0;
         repeat (10000) @(posedge clk);
         $fatal(1, "stream subsystem timeout");

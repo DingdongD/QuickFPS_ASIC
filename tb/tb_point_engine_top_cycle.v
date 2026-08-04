@@ -12,8 +12,10 @@ module tb_point_engine_top_cycle;
     localparam NUM_POINTS = 48;
     localparam MERGE_COUNT = 3;
     localparam PASSES = (MERGE_COUNT + 1 + L - 1) / L;
+    localparam POINT_IO_PIPELINE_CYCLES = 1;
     localparam EXPECTED_LATENCY =
-        PASSES * ((NUM_POINTS / R) + (6 * L)) + 2;
+        PASSES * ((NUM_POINTS / R) + (6 * L)) + 2 +
+        POINT_IO_PIPELINE_CYCLES;
 
     reg clk = 1'b0;
     always #5 clk = ~clk;

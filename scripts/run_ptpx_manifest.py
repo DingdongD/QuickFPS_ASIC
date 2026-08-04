@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -30,6 +31,9 @@ def main() -> int:
     parser.add_argument("--vcs", default="vcs")
     parser.add_argument("--pt-shell", default="pt_shell")
     parser.add_argument("--output", type=Path, default=Path("build/ptpx_energy.json"))
+    parser.add_argument(
+        "--ppa-output", type=Path, default=Path("build/ptpx_strict_ppa.yaml")
+    )
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[1]
@@ -70,6 +74,17 @@ def main() -> int:
                 "TARGET_DB": str(target_db),
                 "CELL_VERILOG": str(cell_verilog),
                 "CLOCK_PERIOD_NS": str(manifest.get("clock_period_ns", 1.0)),
+                "DC_TIMING_HIGH_EFFORT": (
+                    "1" if bool(spec.get("dc_timing_high_effort", False)) else "0"
+                ),
+                "DC_OPT_CLOCK_PERIOD_NS": str(
+                    spec.get(
+                        "dc_opt_clock_period_ns",
+                        manifest.get("clock_period_ns", 1.0),
+                    )
+                ),
+                "DC_REUSE_DDC": "",
+                "GATE_PASS_REGEX": str(spec.get("gate_pass_regex", "_PASS")),
                 "DC_SHELL": args.dc_shell,
                 "VCS": args.vcs,
                 "PT_SHELL": args.pt_shell,
@@ -82,24 +97,28 @@ def main() -> int:
         completed.append(name)
 
     output = args.output if args.output.is_absolute() else root / args.output
+    ppa_output = (
+        args.ppa_output if args.ppa_output.is_absolute() else root / args.ppa_output
+    )
     run(
         [
-            "python3",
-            "scripts/extract_ptpx_energy.py",
-            "--root",
-            "build/ptpx",
+            sys.executable,
+            "scripts/collect_strict_cycle_ppa.py",
+            str(root),
+            str(ppa_output),
+            str(output),
             "--manifest",
             str(manifest_path),
-            "--clock-hz",
-            str(1.0e9 / float(manifest.get("clock_period_ns", 1.0))),
-            "--output",
-            str(output),
+            "--modules",
             *completed,
         ],
         env=dict(os.environ),
         cwd=root,
     )
-    print(f"PTPX_MANIFEST_PASS modules={','.join(completed)} output={output}")
+    print(
+        f"PTPX_MANIFEST_PASS modules={','.join(completed)} "
+        f"ppa={ppa_output} energy={output}"
+    )
     return 0
 
 

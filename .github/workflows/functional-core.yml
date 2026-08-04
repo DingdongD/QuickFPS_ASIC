@@ -43,6 +43,11 @@ jobs:
           assert len((root / 'dist.hex').read_text().splitlines()) == 8
           assert len((root / 'buckets.hex').read_text().splitlines()) == 2
           assert len((root / 'golden_indices.txt').read_text().splitlines()) == 4
+          assert (root / 'reorder_map.txt').read_text().splitlines() == [
+              f'{index} {index}' for index in range(8)
+          ]
+          assert [int(value) for value in
+                  (root / 'golden_indices.txt').read_text().splitlines()] == [0, 7, 3, 5]
           PY
 
       - name: Run RTL functional regressions
@@ -61,7 +66,7 @@ jobs:
             --preprocessed build/preprocessed \
             --samples 4 \
             --output build/quickfps_workload.json
-          python3 -m quickfps_cycle.cli \
+          python3 -m quickfps_cycle \
             --workload build/quickfps_workload.json \
             --chunk-points 4 \
             --bucket-fifo-depth 2 \
@@ -85,6 +90,7 @@ jobs:
             --log-dir build/functional \
             --workload build/quickfps_workload.json \
             --cycle-result build/cycle_result.json \
+            --reorder-map build/preprocessed/reorder_map.txt \
             --output build/rtl_cycle_validation.json
 
   dramsim3:

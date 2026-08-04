@@ -6,15 +6,23 @@
       "testbench_top": "tb_bucket_decision_activity",
       "strip_path": "tb_bucket_decision_activity/dut",
       "vcd": "build/activity/bucket_decision_pipe.vcd",
-      "counters": ["bucket_pipeline_active_cycles"]
+      "vcd_start_ns": 5.0,
+      "dc_timing_high_effort": true,
+      "dc_opt_clock_period_ns": 0.995,
+      "counters": ["bucket_pipeline_active_cycles"],
+      "gate_pass_regex": "BUCKET_DECISION_ACTIVITY_PASS",
+      "composition_group": "bucket_frontend"
     },
     "axi_burst_reader": {
       "testbench": "tb/tb_axi_burst_reader_activity.v",
       "testbench_top": "tb_axi_burst_reader_activity",
       "strip_path": "tb_axi_burst_reader_activity/dut",
       "vcd": "build/activity/axi_burst_reader.vcd",
+      "vcd_start_ns": 5.0,
       "counters": ["coord_read_busy_cycles", "dist_read_busy_cycles"],
       "instances": 2,
+      "gate_pass_regex": "AXI_READER_PASS",
+      "composition_group": "streaming_leaf",
       "note": "one characterized RTL is applied independently to coordinate and MDT reader instances"
     },
     "axi_burst_writer": {
@@ -22,22 +30,31 @@
       "testbench_top": "tb_axi_burst_writer_activity",
       "strip_path": "tb_axi_burst_writer_activity/dut",
       "vcd": "build/activity/axi_burst_writer.vcd",
-      "counters": ["dist_write_busy_cycles"]
+      "vcd_start_ns": 5.0,
+      "counters": ["dist_write_busy_cycles"],
+      "gate_pass_regex": "AXI_WRITER_PASS",
+      "composition_group": "streaming_leaf"
     },
     "pingpong_chunk_ctrl": {
       "testbench": "tb/tb_pingpong_chunk_activity.v",
       "testbench_top": "tb_pingpong_chunk_activity",
       "strip_path": "tb_pingpong_chunk_activity/dut",
       "vcd": "build/activity/pingpong_chunk_ctrl.vcd",
-      "counters": ["point_engine_busy_cycles"]
+      "vcd_start_ns": 5.0,
+      "counters": ["point_engine_busy_cycles"],
+      "gate_pass_regex": "PINGPONG_ACTIVITY_PASS",
+      "composition_group": "streaming_leaf"
     },
     "quickfps_stream_subsystem": {
       "testbench": "tb/tb_quickfps_stream_subsystem.v",
       "testbench_top": "tb_quickfps_stream_subsystem",
       "strip_path": "tb_quickfps_stream_subsystem/dut",
       "vcd": "build/activity/quickfps_stream_subsystem.vcd",
+      "vcd_start_ns": 5.0,
       "counters": ["dma_busy_cycles"],
       "default_characterize": false,
+      "gate_pass_regex": "STREAM_SUBSYSTEM_PASS",
+      "composition_group": "streaming_aggregate",
       "note": "integrated control plus two readers and one writer; characterize as an alternative aggregate and do not sum with leaf-module estimates"
     },
     "sram_1r1w_ptpx": {
@@ -45,8 +62,23 @@
       "testbench_top": "tb_sram_1r1w_activity",
       "strip_path": "tb_sram_1r1w_activity/dut",
       "vcd": "build/activity/sram_1r1w_sync.vcd",
+      "vcd_start_ns": 5.0,
       "counters": ["point_engine_busy_cycles"],
+      "gate_pass_regex": "SRAM_ACTIVITY_PASS",
+      "default_characterize": false,
+      "simulator_eligible": false,
+      "composition_group": "memory_proxy",
       "note": "adapter/control plus inferred-array activity; replace array energy with compiler-macro data for final SRAM power"
+    },
+    "point_engine_top": {
+      "testbench": "tb/tb_point_engine_top_gate.v",
+      "testbench_top": "tb_point_engine_top_gate",
+      "strip_path": "tb_point_engine_top_gate/dut",
+      "vcd": "activity_1ghz/point_engine_top_gate.vcd",
+      "vcd_start_ns": 3.0,
+      "counters": ["point_compute_cycles"],
+      "gate_pass_regex": "PTOP_CYCLE_PASS",
+      "composition_group": "compute"
     }
   },
   "existing_strict_modules": {

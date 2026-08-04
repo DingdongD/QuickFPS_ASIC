@@ -71,12 +71,13 @@ For one bucket or chunk:
 ```text
 point_batches = ceil(point_count / 4)
 merge_passes  = ceil((merge_count + 1) / 4)
-latency       = merge_passes * (4 + point_batches + 20) + 2
+latency       = merge_passes * (4 + point_batches + 20) + 2 + 1
 ```
 
 The constants correspond to four merge-load cycles, a 4-column chain of
-five-cycle PEs, and the collect/push control states.  The existing RTL test
-case with 48 points and three buffered references remains exactly 38 cycles.
+five-cycle PEs, two collect/push control cycles, and one registered SRAM
+request stage. The existing RTL test case with 48 points and three buffered
+references is exactly 39 cycles.
 
 ### Memory hierarchy
 
@@ -103,7 +104,7 @@ into `build/activity/`.  It covers:
 
 - deterministic Max-Tree tie breaking;
 - partial Point-Engine batches;
-- the 38-cycle Point-Engine contract;
+- the 39-cycle Point-Engine contract;
 - end-to-end functional FPS sequence;
 - credit-safe bucket decision backpressure;
 - ping-pong chunk scheduling;
@@ -191,6 +192,7 @@ python3 cmodel/validate_rtl_cycles.py \
   --log-dir build/functional \
   --workload build/quickfps_workload.json \
   --cycle-result build/cycle_result.json \
+  --reorder-map build/preprocessed/reorder_map.txt \
   --output build/rtl_cycle_validation.json
 ```
 
@@ -213,6 +215,7 @@ counting the integrated stream subsystem twice.
 python3 scripts/run_ptpx_manifest.py \
   --target-db /path/to/standard_cells.db \
   --cell-verilog /path/to/standard_cells.v \
+  --ppa-output build/ptpx_strict_ppa.yaml \
   --output build/ptpx_energy.json
 ```
 
@@ -221,7 +224,14 @@ The command runs:
 1. Design Compiler at the requested 1 ns clock;
 2. mapped-netlist VCS simulation with SDF and module-specific VCD activity;
 3. PrimeTime PX using the mapped netlist and VCD;
-4. conversion from dynamic power to pJ per active cycle.
+4. strict rejection unless gate golden, DC/PT timing, physical constraints,
+   100% net annotation, leaf-cell annotation, and analysis coverage pass;
+5. conversion from gate-VCD total power to pJ per characterized active cycle.
+
+The JSON also carries cell area, process, characterization clock, module
+instance count, and composition group.  The simulator rejects a database whose
+clock does not match `--clock-hz`.  The current idle value is a leakage-only
+lower bound because no dedicated idle gate VCD is characterized yet.
 
 To characterize the aggregate streaming subsystem instead of its leaves:
 
@@ -249,6 +259,24 @@ The estimator combines cycle counters with per-module active and idle energy.
 Two physical reader instances are accounted for independently through
 `coord_read_busy_cycles` and `dist_read_busy_cycles`.
 
+The checked-in strict database is
+`reports/quickfps_cycle_strict_1ghz_energy.json`; its full acceptance and PPA
+record is `reports/quickfps_cycle_strict_1ghz_ppa.yaml`. The energy loader
+rejects both a characterization-clock mismatch and a mismatch between the RTL
+cycle-validation record and the configured bucket/Point-Engine timing model.
+
+For `build/quickfps_workload_39.json`, the validated outputs are:
+
+| Memory backend | Accelerator cycles | Characterized logic energy |
+| --- | ---: | ---: |
+| Analytical banked DDR | 760 | 11.014 nJ |
+| Pinned official DRAMsim3 | 395 | 8.946 nJ |
+
+The energy column composes `point_engine_top`, `bucket_decision_pipe`, two AXI
+readers, one AXI writer, and `pingpong_chunk_ctrl`. It intentionally excludes
+the alternative aggregate top, SRAM macro, DDR controller/PHY, and DRAM-device
+energy.
+
 ## Deliberate boundary
 
 This milestone does not claim:
@@ -256,6 +284,7 @@ This milestone does not claim:
 - placement, routing, clock-tree synthesis, extraction, IR drop, or EM;
 - scan insertion, ATPG, JTAG, or SRAM MBIST;
 - compiler-macro SRAM energy unless supplied separately;
+- clock-tree, routed interconnect, and realistic idle-clock dynamic power;
 - a physical AXI interconnect or DDR PHY/controller implementation.
 
 It does provide the synthesizable DMA/control modules, gate-VCD/PTPX flow, an

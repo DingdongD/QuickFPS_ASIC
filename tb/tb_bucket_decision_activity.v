@@ -14,9 +14,9 @@ module tb_bucket_decision_activity;
     reg rst_n=1'b0;
     reg in_valid=1'b0;
     wire in_ready;
-    wire [BIDX_W-1:0] in_bid;
+    reg [BIDX_W-1:0] in_bid={BIDX_W{1'b0}};
     reg [ENTRY_W-1:0] in_entry={ENTRY_W{1'b0}};
-    wire in_first_iter;
+    reg in_first_iter=1'b1;
     wire out_valid;
     reg out_ready=1'b1;
     wire [1:0] out_action;
@@ -28,9 +28,6 @@ module tb_bucket_decision_activity;
     integer sent=0;
     integer received=0;
     integer stalls=0;
-
-    assign in_bid = sent[BIDX_W-1:0];
-    assign in_first_iter = sent < 32;
 
     bucket_decision_pipe dut (
         .clk(clk), .rst_n(rst_n),
@@ -61,9 +58,6 @@ module tb_bucket_decision_activity;
 
     always @(posedge clk) begin
         cycle <= cycle + 1;
-        out_ready <= (cycle % 9 != 0) && !(cycle >= 20 && cycle < 33);
-        if (rst_n)
-            in_valid <= sent < 64;
         if (in_valid && in_ready)
             sent <= sent + 1;
         else if (in_valid)
@@ -83,10 +77,19 @@ module tb_bucket_decision_activity;
         end
     end
 
+    // Drive primary inputs half a cycle away from the DUT sampling edge. This
+    // models a registered source and keeps SDF timing checks meaningful.
+    always @(negedge clk) begin
+        in_bid <= sent[BIDX_W-1:0];
+        in_first_iter <= sent < 32;
+        in_valid <= rst_n && (sent < 64);
+        out_ready <= (cycle % 9 != 0) && !(cycle >= 20 && cycle < 33);
+    end
+
     initial begin
         $dumpfile("build/activity/bucket_decision_pipe.vcd");
         $dumpvars(0, tb_bucket_decision_activity.dut);
-        repeat (5) @(posedge clk);
+        repeat (5) @(negedge clk);
         rst_n <= 1'b1;
         repeat (5000) @(posedge clk);
         $fatal(1, "bucket decision activity timeout");

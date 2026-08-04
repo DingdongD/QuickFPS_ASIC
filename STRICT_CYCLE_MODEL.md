@@ -84,7 +84,7 @@ The strict model is cycle-calibrated against:
 
 - four-cycle bucket-distance latency and II=1 admission;
 - registered decision FIFO behavior under full-credit backpressure;
-- the 38-cycle 48-point Point-Engine case;
+- the 39-cycle 48-point Point-Engine case;
 - ping-pong read/compute/write causal order;
 - AXI burst and 64-byte DRAM transaction separation;
 - reordered-memory and original-point index domains.

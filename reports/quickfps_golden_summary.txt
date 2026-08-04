@@ -1,5 +1,5 @@
 [fp32_ops] pass=True details={pass=True, cases=128, mismatches=0, max_abs={'add': 0.0, 'sub': 0.0, 'mul': 0.0}, max_rel={'add': 0.0, 'sub': 0.0, 'mul': 0.0}}
 [bucket_cd] pass=True details={pass=True, cases=96, observed=96, mismatches=0, max_abs_dlb=7.62939453125e-06, max_abs_d=3.0517578125e-05}
 [pe] pass=True details={pass=True, cases=96, observed=96, mismatches=0, max_abs=1.1444091796875e-05}
-[point_engine_top_cycles] pass=True details={pass=True, latency_cycles=38, shape=R=4,L=4,num_points=48,merge_count=3}
-[bucket_engine_strict] pass=True details={pass=True, latency_cycles=49, requests=7, responses=7}
+[point_engine_top_cycles] pass=True details={pass=True, latency_cycles=39, shape=R=4,L=4,num_points=48,merge_count=3}
+[bucket_engine_strict] pass=True details={pass=True, latency_cycles=73, requests=7, responses=7}

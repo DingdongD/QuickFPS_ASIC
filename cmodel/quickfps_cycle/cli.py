@@ -81,9 +81,17 @@ def main() -> int:
     if args.ptpx_energy:
         activity = dict(result.counters)
         activity.update(result.memory_stats)
-        output["energy"] = PTPXEnergyModel.load(args.ptpx_energy).estimate(
+        energy_model = PTPXEnergyModel.load(args.ptpx_energy)
+        energy_model.require_clock(args.clock_hz)
+        energy_model.require_cycle_contract(accelerator)
+        output["energy"] = energy_model.estimate(
             activity, result.cycles
         )
+        output["energy_characterization"] = {
+            "clock_hz": energy_model.clock_hz,
+            "process": energy_model.process,
+            "schema_version": energy_model.schema_version,
+        }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n")
     print(

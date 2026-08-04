@@ -254,7 +254,15 @@ BuildResult preprocess_once(const std::vector<Point>& input,
     result.reordered_to_original.reserve(points.size());
     result.buckets.reserve(leaves.size());
     std::uint32_t ptr = 0;
-    for (const Leaf& leaf : leaves) {
+    for (Leaf& leaf : leaves) {
+        // nth_element defines bucket membership but intentionally leaves the
+        // order inside each leaf unspecified. Canonicalize that order so host
+        // output, RTL fixtures, and repeated toolchain runs share one index
+        // domain.
+        std::sort(leaf.ids.begin(), leaf.ids.end(),
+                  [&](std::uint32_t a, std::uint32_t b) {
+            return points[a].original_index < points[b].original_index;
+        });
         Bucket bucket;
         bucket.bounds = compute_bounds(points, leaf.ids);
         bucket.point_ptr = ptr;

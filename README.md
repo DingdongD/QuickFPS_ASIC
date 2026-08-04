@@ -30,13 +30,13 @@ merge-point loads, streamed point batches, observed `o_row_valid`, final
 `far_valid`, and FIFO backpressure. It is not represented by a fixed latency
 parameter. For each merge pass, `L` load cycles are followed by `Nbatch` issue
 cycles and an FSM-visible `5*L` pipeline drain, where
-`Nbatch = num_points / R` in the current RTL. With no FIFO or memory stalls, one
-bucket therefore takes approximately `P*(Nbatch + 6*L) + 2` clocks from
+`Nbatch = ceil(num_points / R)` in the current RTL. With no FIFO or memory
+stalls, one bucket therefore takes `P*(Nbatch + 6*L) + 3` clocks from
 descriptor acceptance back to idle, where
-`P = ceil((merge_count + 1)/L)`. The two final clocks are the collect and push
-handoffs; actual completion remains controlled by valid/full events rather
-than by this formula. The current wrapper requires `num_points` to be divisible
-by `R`; partial final batches are not yet masked.
+`P = ceil((merge_count + 1)/L)`. The fixed term covers collect, registered
+coordinate capture, and push handoffs; actual completion remains controlled by
+valid/full events rather than by a delay counter. Partial final batches are
+masked lane by lane.
 
 ## Power Composition
 
@@ -57,27 +57,33 @@ signoff-quality total power is required.
 
 ## Validation Status
 
-The checked-in current reports target TSMC 28 nm HPC+ at 1 GHz.
+The checked-in current reports target TSMC 28 nm HPC+ BWP40P140 SSG 0.81 V,
+125 C at 1 GHz. They use a DC mapped netlist, maximum-SDF gate VCS, an active
+window gate VCD, and PTPX `read_vcd`/`update_power`.
 
 - FP32 operators, `pe`, and `bucket_cd` pass randomized Python/RTL golden tests.
 - The default 4x4 `point_engine` passes RTL and mapped-netlist gate-level golden
   tests (48 row results, zero mismatches).
-- `pe`, `bucket_cd`, and `point_engine` have gate-level VCD PTPX results with
-  100% net annotation in the selected reports.
-- `point_engine_top` and `bucket_engine` now have independent strict
-  post-synthesis gate-VCD PTPX points in
-  `reports/quickfps_strict_tops_1ghz_ppa_20260803_190839.yaml`.
-- `point_engine_top`: 38-cycle descriptor-to-push latency, 139604.09 total cell
-  area, 49.5 mW total PTPX power, 100% net annotation, and 99.872% fully
-  annotated leaf cells.
-- `bucket_engine`: 49-cycle start-to-done latency, 32899.99 total cell area,
-  18.8 mW total PTPX power, 100% net annotation, and 99.834% fully annotated
-  leaf cells.
-- Both strict tops pass mapped-netlist golden checks, DC/PTPX setup and hold,
-  physical design-rule checks, and 100% synthesis-invariant annotation. These
-  are zero-delay post-synthesis activity results, not post-layout signoff.
-- `point_engine_top` contains the complete 4x4 `point_engine`; their module
-  powers are alternative hierarchy measurements and must not be added.
+- Six strict module points pass gate golden, gate timing checks, DC/PT setup and
+  hold, constraint checks, 100% net annotation, 100% synthesis-invariant
+  annotation, and at least 99.8% fully annotated leaf cells. The source data is
+  `reports/quickfps_cycle_strict_1ghz_ppa.yaml`.
+- `point_engine_top`: 39-cycle descriptor-to-push latency, 144251.23 um2 cell
+  area, and 49.9 mW total power. Its setup slack is positive but only 0.001 ps.
+- `bucket_decision_pipe`: II=1, first output latency 5 cycles, 37342.87 um2,
+  18.5 mW, and 5.003 ps setup slack after guardbanded incremental mapping.
+- Reader, writer, and ping-pong controller powers are 0.675, 0.746, and
+  1.600 mW. The integrated streaming subsystem is 5004.22 um2 and 3.31 mW.
+- The aggregate streaming subsystem is an alternative measurement to its DMA
+  and controller leaves and must not be summed with them.
+
+The simulator-ready module database is
+`reports/quickfps_cycle_strict_1ghz_energy.json`. For the checked RTL workload,
+the strict scheduler reports 760 cycles with the analytical DDR backend and
+395 accelerator cycles with the pinned DRAMsim3 backend. Their characterized
+logic energies are 11.014 nJ and 8.946 nJ respectively. SRAM macro, DDR
+controller/PHY, DRAM-device, clock-tree, and routed-interconnect energy are not
+included.
 
 Run local golden tests with:
 

@@ -49,9 +49,17 @@ def validate_point_engine(log_dir: Path) -> Dict[str, int]:
     push_cycle, latency = pushes[0]
     if push_cycle - accepts[0] != latency:
         raise AssertionError("Point-Engine reported latency is inconsistent")
-    if latency != 38:
+    if latency != 39:
         raise AssertionError(f"validated Point-Engine latency changed: {latency}")
-    return {"accept_cycle": accepts[0], "push_cycle": push_cycle, "latency": latency}
+    return {
+        "accept_cycle": accepts[0],
+        "push_cycle": push_cycle,
+        "latency": latency,
+        "reference_num_points": 48,
+        "reference_merge_count": 3,
+        "pe_rows": 4,
+        "pe_cols": 4,
+    }
 
 
 def validate_bucket_pipe(log_dir: Path) -> Dict[str, int]:
@@ -180,9 +188,9 @@ def validate_sequence_domains(
     except KeyError as error:
         raise AssertionError(f"workload index missing from reorder map: {error.args[0]}") from error
 
-    # The host KD-tree uses nth-element partitioning, so a leaf is contiguous
-    # but not sorted. Workload/C-model indices are in this reordered memory
-    # domain, while the fixed RTL smoke test reports the original point IDs.
+    # Workload/C-model indices are in reordered storage space, while the fixed
+    # RTL smoke test reports original point IDs. The host emits an explicit map
+    # even though leaf-local ordering is canonicalized for reproducibility.
     if rtl_original != workload_original:
         raise AssertionError(
             "mapped workload sequence does not match the original-index RTL "
@@ -246,6 +254,7 @@ def main() -> int:
         + 12
         + row_latency
         + int(accelerator["point_ctrl_overhead"])
+        + int(accelerator["point_io_pipeline_cycles"])
     )
     if expected_latency != point["latency"]:
         raise AssertionError(

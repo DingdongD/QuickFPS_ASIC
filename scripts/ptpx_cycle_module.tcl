@@ -2,6 +2,8 @@ set TOP_NAME [getenv TOP_NAME]
 set WORK_ROOT [getenv WORK_ROOT]
 set TARGET_DB [getenv TARGET_DB]
 set VCD_FILE [getenv VCD_FILE]
+set VCD_START_NS [getenv VCD_START_NS]
+set VCD_END_NS [getenv VCD_END_NS]
 set STRIP_PATH [getenv STRIP_PATH]
 
 if {$TOP_NAME eq "" || $WORK_ROOT eq "" || $TARGET_DB eq "" ||
@@ -30,15 +32,22 @@ if {[sizeof_collection [all_outputs]] > 0} {
     set_load 0.005 [all_outputs]
 }
 
-read_vcd -strip_path $STRIP_PATH $VCD_FILE
+if {$VCD_START_NS ne "" && $VCD_END_NS ne ""} {
+    puts "QUICKFPS_VCD_WINDOW start_ns=$VCD_START_NS end_ns=$VCD_END_NS"
+    read_vcd -strip_path $STRIP_PATH \
+        -time [list $VCD_START_NS $VCD_END_NS] $VCD_FILE
+} else {
+    puts "QUICKFPS_VCD_WINDOW full_trace=1"
+    read_vcd -strip_path $STRIP_PATH $VCD_FILE
+}
 check_timing > "$RPT_DIR/check_timing.rpt"
 update_timing
 update_power
 report_analysis_coverage > "$RPT_DIR/analysis_coverage.rpt"
 report_switching_activity > "$RPT_DIR/switching_activity.rpt"
 report_switching_activity -list_not_annotated > "$RPT_DIR/not_annotated.rpt"
-report_timing -delay_type max -max_paths 20 -significant_digits 8 > "$RPT_DIR/setup.rpt"
-report_timing -delay_type min -max_paths 20 -significant_digits 8 > "$RPT_DIR/hold.rpt"
+report_timing -delay_type max -slack_lesser_than 1000000 -max_paths 20 -significant_digits 8 > "$RPT_DIR/setup.rpt"
+report_timing -delay_type min -slack_lesser_than 1000000 -max_paths 20 -significant_digits 8 > "$RPT_DIR/hold.rpt"
 report_constraint -all_violators -significant_digits 6 > "$RPT_DIR/constraints.rpt"
 report_power -hierarchy -verbose > "$RPT_DIR/power.rpt"
 report_power > "$RPT_DIR/power_summary.rpt"

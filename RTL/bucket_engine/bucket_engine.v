@@ -80,8 +80,6 @@ module bucket_engine #(
         (travel_pos == {(BIDX_W+1){1'b0}}) ? winner_bidx :
         (pos_minus_one < winner_bidx) ? pos_minus_one :
                                          (pos_minus_one + 1'b1);
-    assign bb_raddr = (state == S_COLLECT) ? nf_bid : travel_bid;
-
     // Launch only one bucket at a time into the four-stage distance pipeline.
     // This functional controller sacrifices bucket-II=1 but gives lossless
     // backpressure with a small FIFO and is the reference control path for the
@@ -188,6 +186,7 @@ module bucket_engine #(
     wire [PIDX_W-1:0] nf_idx = fp_rd_data[128 +:PIDX_W];
     wire [BIDX_W-1:0] nf_bid =
         fp_rd_data[128+PIDX_W +:BIDX_W];
+    assign bb_raddr = (state == S_COLLECT) ? nf_bid : travel_bid;
     wire take_return = !best_valid ||
                        better(nf_dist, nf_idx, best_dist, best_idx);
 

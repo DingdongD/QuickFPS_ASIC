@@ -32,6 +32,9 @@ module tb_pingpong_chunk_activity;
     integer coord_timer=-1, dist_timer=-1, write_timer=-1, compute_timer=-1;
     integer coord_count=0, dist_count=0, write_count=0, compute_count=0;
     integer cycle=0;
+    reg coord_fire_q=1'b0, dist_fire_q=1'b0;
+    reg write_fire_q=1'b0, compute_fire_q=1'b0;
+    reg [COUNT_W-1:0] compute_point_count_q={COUNT_W{1'b0}};
 
     pingpong_chunk_ctrl dut (
         .clk(clk), .rst_n(rst_n),
@@ -57,50 +60,12 @@ module tb_pingpong_chunk_activity;
 
     always @(posedge clk) begin
         cycle <= cycle + 1;
-        coord_done <= 1'b0;
-        dist_rd_done <= 1'b0;
-        dist_wr_done <= 1'b0;
-        compute_done <= 1'b0;
-        coord_cmd_ready <= (cycle % 11 != 0);
-        dist_rd_cmd_ready <= (cycle % 13 != 0);
-        dist_wr_cmd_ready <= (cycle % 7 != 0);
-        compute_ready <= (cycle % 17 != 0);
-
-        if (coord_cmd_valid && coord_cmd_ready) begin
-            if (coord_timer >= 0) $fatal(1, "overlapping coordinate command");
-            coord_timer <= 18;
-            coord_count <= coord_count + 1;
-        end else if (coord_timer == 0) begin
-            coord_done <= 1'b1;
-            coord_timer <= -1;
-        end else if (coord_timer > 0) coord_timer <= coord_timer - 1;
-
-        if (dist_rd_cmd_valid && dist_rd_cmd_ready) begin
-            if (dist_timer >= 0) $fatal(1, "overlapping MDT read command");
-            dist_timer <= 14;
-            dist_count <= dist_count + 1;
-        end else if (dist_timer == 0) begin
-            dist_rd_done <= 1'b1;
-            dist_timer <= -1;
-        end else if (dist_timer > 0) dist_timer <= dist_timer - 1;
-
-        if (compute_start && compute_ready) begin
-            if (compute_timer >= 0) $fatal(1, "overlapping compute command");
-            compute_timer <= 30 + compute_point_count / 4;
-            compute_count <= compute_count + 1;
-        end else if (compute_timer == 0) begin
-            compute_done <= 1'b1;
-            compute_timer <= -1;
-        end else if (compute_timer > 0) compute_timer <= compute_timer - 1;
-
-        if (dist_wr_cmd_valid && dist_wr_cmd_ready) begin
-            if (write_timer >= 0) $fatal(1, "overlapping MDT write command");
-            write_timer <= 12;
-            write_count <= write_count + 1;
-        end else if (write_timer == 0) begin
-            dist_wr_done <= 1'b1;
-            write_timer <= -1;
-        end else if (write_timer > 0) write_timer <= write_timer - 1;
+        coord_fire_q <= coord_cmd_valid && coord_cmd_ready;
+        dist_fire_q <= dist_rd_cmd_valid && dist_rd_cmd_ready;
+        write_fire_q <= dist_wr_cmd_valid && dist_wr_cmd_ready;
+        compute_fire_q <= compute_start && compute_ready;
+        if (compute_start && compute_ready)
+            compute_point_count_q <= compute_point_count;
 
         if (bucket_done) begin
             if (coord_count != 5 || dist_count != 5 ||
@@ -111,14 +76,62 @@ module tb_pingpong_chunk_activity;
         end
     end
 
+    always @(negedge clk) begin
+        coord_done <= 1'b0;
+        dist_rd_done <= 1'b0;
+        dist_wr_done <= 1'b0;
+        compute_done <= 1'b0;
+        coord_cmd_ready <= (cycle % 11 != 0);
+        dist_rd_cmd_ready <= (cycle % 13 != 0);
+        dist_wr_cmd_ready <= (cycle % 7 != 0);
+        compute_ready <= (cycle % 17 != 0);
+
+        if (coord_fire_q) begin
+            if (coord_timer >= 0) $fatal(1, "overlapping coordinate command");
+            coord_timer <= 18;
+            coord_count <= coord_count + 1;
+        end else if (coord_timer == 0) begin
+            coord_done <= 1'b1;
+            coord_timer <= -1;
+        end else if (coord_timer > 0) coord_timer <= coord_timer - 1;
+
+        if (dist_fire_q) begin
+            if (dist_timer >= 0) $fatal(1, "overlapping MDT read command");
+            dist_timer <= 14;
+            dist_count <= dist_count + 1;
+        end else if (dist_timer == 0) begin
+            dist_rd_done <= 1'b1;
+            dist_timer <= -1;
+        end else if (dist_timer > 0) dist_timer <= dist_timer - 1;
+
+        if (compute_fire_q) begin
+            if (compute_timer >= 0) $fatal(1, "overlapping compute command");
+            compute_timer <= 30 + compute_point_count_q / 4;
+            compute_count <= compute_count + 1;
+        end else if (compute_timer == 0) begin
+            compute_done <= 1'b1;
+            compute_timer <= -1;
+        end else if (compute_timer > 0) compute_timer <= compute_timer - 1;
+
+        if (write_fire_q) begin
+            if (write_timer >= 0) $fatal(1, "overlapping MDT write command");
+            write_timer <= 12;
+            write_count <= write_count + 1;
+        end else if (write_timer == 0) begin
+            dist_wr_done <= 1'b1;
+            write_timer <= -1;
+        end else if (write_timer > 0) write_timer <= write_timer - 1;
+
+    end
+
     initial begin
         $dumpfile("build/activity/pingpong_chunk_ctrl.vcd");
         $dumpvars(0, tb_pingpong_chunk_activity.dut);
-        repeat (5) @(posedge clk);
+        repeat (5) @(negedge clk);
         rst_n <= 1'b1;
-        @(posedge clk);
+        @(negedge clk);
         bucket_valid <= 1'b1;
-        @(posedge clk);
+        @(negedge clk);
         bucket_valid <= 1'b0;
         repeat (10000) @(posedge clk);
         $fatal(1, "pingpong activity timeout");

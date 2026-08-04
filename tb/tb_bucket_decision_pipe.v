@@ -13,7 +13,7 @@ module tb_bucket_decision_pipe;
     reg clk=1'b0;
     always #0.5 clk=~clk;
     reg rst_n=1'b0;
-    reg in_valid=1'b0;
+    wire in_valid;
     wire in_ready;
     wire [BIDX_W-1:0] in_bid;
     reg [ENTRY_W-1:0] in_entry={ENTRY_W{1'b0}};
@@ -33,6 +33,7 @@ module tb_bucket_decision_pipe;
     integer stall_cycles=0;
 
     assign in_bid = sent[BIDX_W-1:0];
+    assign in_valid = rst_n && (sent < 16);
 
     bucket_decision_pipe #(
         .BIDX_W(BIDX_W), .PIDX_W(PIDX_W), .MCNT_W(MCNT_W),
@@ -71,9 +72,6 @@ module tb_bucket_decision_pipe;
             out_ready <= 1'b0;
         else
             out_ready <= (cycle % 5 != 0);
-
-        if (rst_n)
-            in_valid <= sent < 16;
 
         if (in_valid && in_ready) begin
             if (first_accept < 0) first_accept <= cycle;

@@ -1,0 +1,541 @@
+run:
+  process: TSMC28 HPC+ BWP40P140 SSG 0.81V 125C
+  clock_period_ns: 1.0
+  flow: DC mapped netlist -> gate-level VCS/SDF/VCD -> PTPX read_vcd/update_power
+  rtl_tree_sha256: 3bfc35aec19b9e1079fd8fe4172dad2996358a97c935ae2d12604e5b4e07d94a
+  strict_policy:
+    gate_golden_required: true
+    net_vcd_annotation_pct: 100.0
+    minimum_fully_annotated_leaf_cells_pct: 99.8
+    setup_hold_and_constraints_clean: true
+strict_gate_vcd_ppa:
+  point_engine_top:
+    composition_group: compute
+    simulator_eligible: true
+    counters:
+    - point_compute_cycles
+    instances: 1
+    gate_level_workload:
+      latency_cycles: 39
+    dc_1ghz:
+      cell_area: 144251.225206
+      comb_area: 113418.521727
+      seq_area: 30832.703479
+      cells: 180759
+      setup_slack_ns: 1.0e-06
+      hold_slack_ns: 0.009146
+      check_design_lint_counts:
+        LINT-28: 14
+        LINT-1: 748
+        LINT-33: 1632
+        LINT-2: 33
+    gate_vcd:
+      path: activity_1ghz/point_engine_top_gate.vcd
+      sha256: f17798dce3544fc4daa273143e610cab4067bc5a1db948af38fed72fc8bf8527
+      annotated_nets: 193551
+      total_nets: 193551
+      nets_from_vcd_pct: 100.0
+      fully_annotated_leaf_cells: 179889
+      total_leaf_cells: 179918
+      fully_annotated_leaf_cells_pct: 99.983882
+      minimum_leaf_cells_pct: 99.8
+      timing_violations: 0
+      analysis_start_ns: 3.0
+      analysis_end_ns: 43.5
+      analysis_duration_ns: 40.5
+      annotated_synthesis_invariant_points: 16506
+      total_synthesis_invariant_points: 16506
+    testbench:
+      path: tb/tb_point_engine_top_gate.v
+      sha256: 3546694e469c1362560407970d654391e0f0e387be185c98845eb44c2d0fb30b
+      pass_regex: PTOP_CYCLE_PASS
+    ptpx_analysis_coverage:
+      setup:
+        total: 15701
+        met: 15692
+        violated: 0
+        untested: 9
+      hold:
+        total: 15701
+        met: 15692
+        violated: 0
+        untested: 9
+    ptpx_gate_vcd_power_w:
+      internal: 0.0463
+      switching: 0.00117
+      leakage: 0.00239
+      total: 0.0499
+    ptpx_timing:
+      setup_slack_ns: 1.18e-06
+      hold_slack_ns: 0.00914552
+    energy_model:
+      active_total_pj_per_cycle: 49.9
+      active_dynamic_pj_per_cycle: 47.47
+      inactive_leakage_pj_per_cycle: 2.39
+      characterization: workload-averaged gate-VCD dynamic power
+      idle_model: leakage-only lower bound; no dedicated idle VCD
+    strict_acceptance:
+      gate_level_golden_pass: true
+      gate_level_timing_clean: true
+      all_nets_from_gate_vcd: true
+      all_synthesis_invariants_annotated: true
+      active_vcd_window_applied: true
+      leaf_annotation_meets_threshold: true
+      dc_setup_hold_clean: true
+      ptpx_setup_hold_clean: true
+      no_physical_constraint_violations: true
+      power_report_present: true
+      analysis_coverage_has_no_violations: true
+      no_fatal_ptpx_errors: true
+  bucket_decision_pipe:
+    composition_group: bucket_frontend
+    simulator_eligible: true
+    counters:
+    - bucket_pipeline_active_cycles
+    instances: 1
+    gate_level_workload:
+      cycles: 95
+      stalls: 18
+    dc_1ghz:
+      cell_area: 37342.871718
+      comb_area: 24867.863934
+      seq_area: 12475.007784
+      cells: 41342
+      setup_slack_ns: 0.005003
+      hold_slack_ns: 0.009146
+      check_design_lint_counts:
+        LINT-28: 119
+        LINT-31: 1
+        LINT-52: 2
+        LINT-32: 80
+        LINT-33: 418
+        LINT-2: 30
+    gate_vcd:
+      path: build/activity/bucket_decision_pipe.vcd
+      sha256: e9e592b4030d99cc11f7374cdc405c7fa3d90ca5bb5d1d6bb80cd9811f8781aa
+      annotated_nets: 43351
+      total_nets: 43351
+      nets_from_vcd_pct: 100.0
+      fully_annotated_leaf_cells: 41188
+      total_leaf_cells: 41225
+      fully_annotated_leaf_cells_pct: 99.910249
+      minimum_leaf_cells_pct: 99.8
+      timing_violations: 0
+      analysis_start_ns: 5.0
+      analysis_end_ns: 95.5
+      analysis_duration_ns: 90.5
+      annotated_synthesis_invariant_points: 6531
+      total_synthesis_invariant_points: 6531
+    testbench:
+      path: tb/tb_bucket_decision_activity.v
+      sha256: f19075e104793b6e4eabc35e9a419e4f2bdeb0ad71beda2eaa1d24eacc7d69c1
+      pass_regex: BUCKET_DECISION_ACTIVITY_PASS
+    ptpx_analysis_coverage:
+      setup:
+        total: 9186
+        met: 5928
+        violated: 0
+        untested: 3258
+      hold:
+        total: 9186
+        met: 5928
+        violated: 0
+        untested: 3258
+    ptpx_gate_vcd_power_w:
+      internal: 0.0175
+      switching: 0.000428
+      leakage: 0.000628
+      total: 0.0185
+    ptpx_timing:
+      setup_slack_ns: 0.00500244
+      hold_slack_ns: 0.00914552
+    energy_model:
+      active_total_pj_per_cycle: 18.499999999999996
+      active_dynamic_pj_per_cycle: 17.928
+      inactive_leakage_pj_per_cycle: 0.628
+      characterization: workload-averaged gate-VCD dynamic power
+      idle_model: leakage-only lower bound; no dedicated idle VCD
+    strict_acceptance:
+      gate_level_golden_pass: true
+      gate_level_timing_clean: true
+      all_nets_from_gate_vcd: true
+      all_synthesis_invariants_annotated: true
+      active_vcd_window_applied: true
+      leaf_annotation_meets_threshold: true
+      dc_setup_hold_clean: true
+      ptpx_setup_hold_clean: true
+      no_physical_constraint_violations: true
+      power_report_present: true
+      analysis_coverage_has_no_violations: true
+      no_fatal_ptpx_errors: true
+  axi_burst_reader:
+    composition_group: streaming_leaf
+    simulator_eligible: true
+    counters:
+    - coord_read_busy_cycles
+    - dist_read_busy_cycles
+    instances: 2
+    gate_level_workload:
+      cycles: 74
+      bursts: 4
+    dc_1ghz:
+      cell_area: 1047.059982
+      comb_area: 559.440006
+      seq_area: 487.619976
+      cells: 1198
+      setup_slack_ns: 0.000269
+      hold_slack_ns: 0.049287
+      check_design_lint_counts:
+        LINT-28: 2
+        LINT-29: 256
+        LINT-31: 3
+        LINT-52: 5
+        LINT-1: 2
+    gate_vcd:
+      path: build/activity/axi_burst_reader.vcd
+      sha256: 34e644a24adff19c287bb81fc8500de675345862686026cf9cff226967edc763
+      annotated_nets: 1580
+      total_nets: 1580
+      nets_from_vcd_pct: 100.0
+      fully_annotated_leaf_cells: 1196
+      total_leaf_cells: 1196
+      fully_annotated_leaf_cells_pct: 100.0
+      minimum_leaf_cells_pct: 99.8
+      timing_violations: 0
+      analysis_start_ns: 5.0
+      analysis_end_ns: 74.5
+      analysis_duration_ns: 69.5
+      annotated_synthesis_invariant_points: 576
+      total_synthesis_invariant_points: 576
+    testbench:
+      path: tb/tb_axi_burst_reader_activity.v
+      sha256: 9912e6e036c4e1f4a1b73b205a86cf069e8350beeae1264d08e854264cdb19cf
+      pass_regex: AXI_READER_PASS
+    ptpx_analysis_coverage:
+      setup:
+        total: 215
+        met: 215
+        violated: 0
+        untested: 0
+      hold:
+        total: 215
+        met: 215
+        violated: 0
+        untested: 0
+    ptpx_gate_vcd_power_w:
+      internal: 0.000644
+      switching: 1.49e-05
+      leakage: 1.62e-05
+      total: 0.000675
+    ptpx_timing:
+      setup_slack_ns: 0.00026862
+      hold_slack_ns: 0.04928685
+    energy_model:
+      active_total_pj_per_cycle: 0.675
+      active_dynamic_pj_per_cycle: 0.6589
+      inactive_leakage_pj_per_cycle: 0.0162
+      characterization: workload-averaged gate-VCD dynamic power
+      idle_model: leakage-only lower bound; no dedicated idle VCD
+    strict_acceptance:
+      gate_level_golden_pass: true
+      gate_level_timing_clean: true
+      all_nets_from_gate_vcd: true
+      all_synthesis_invariants_annotated: true
+      active_vcd_window_applied: true
+      leaf_annotation_meets_threshold: true
+      dc_setup_hold_clean: true
+      ptpx_setup_hold_clean: true
+      no_physical_constraint_violations: true
+      power_report_present: true
+      analysis_coverage_has_no_violations: true
+      no_fatal_ptpx_errors: true
+  axi_burst_writer:
+    composition_group: streaming_leaf
+    simulator_eligible: true
+    counters:
+    - dist_write_busy_cycles
+    instances: 1
+    gate_level_workload:
+      cycles: 56
+    dc_1ghz:
+      cell_area: 1152.26998
+      comb_area: 632.898006
+      seq_area: 519.371974
+      cells: 1371
+      setup_slack_ns: 0.000178
+      hold_slack_ns: 0.03581
+      check_design_lint_counts:
+        LINT-28: 2
+        LINT-29: 256
+        LINT-31: 3
+        LINT-52: 5
+        LINT-1: 4
+    gate_vcd:
+      path: build/activity/axi_burst_writer.vcd
+      sha256: 70982e39ff486e6babc9b53ded9bb96194ed9e202709f8e76c5f36a4963230aa
+      annotated_nets: 1752
+      total_nets: 1752
+      nets_from_vcd_pct: 100.0
+      fully_annotated_leaf_cells: 1369
+      total_leaf_cells: 1369
+      fully_annotated_leaf_cells_pct: 100.0
+      minimum_leaf_cells_pct: 99.8
+      timing_violations: 0
+      analysis_start_ns: 5.0
+      analysis_end_ns: 56.5
+      analysis_duration_ns: 51.5
+      annotated_synthesis_invariant_points: 590
+      total_synthesis_invariant_points: 590
+    testbench:
+      path: tb/tb_axi_burst_writer_activity.v
+      sha256: e62c954990a33db2d95f517f70c6efab12742f5364a8316ffd8c9cc3bde49de1
+      pass_regex: AXI_WRITER_PASS
+    ptpx_analysis_coverage:
+      setup:
+        total: 229
+        met: 229
+        violated: 0
+        untested: 0
+      hold:
+        total: 229
+        met: 229
+        violated: 0
+        untested: 0
+    ptpx_gate_vcd_power_w:
+      internal: 0.000703
+      switching: 2.55e-05
+      leakage: 1.77e-05
+      total: 0.000746
+    ptpx_timing:
+      setup_slack_ns: 0.00017831
+      hold_slack_ns: 0.03581019
+    energy_model:
+      active_total_pj_per_cycle: 0.7460000000000001
+      active_dynamic_pj_per_cycle: 0.7284999999999999
+      inactive_leakage_pj_per_cycle: 0.0177
+      characterization: workload-averaged gate-VCD dynamic power
+      idle_model: leakage-only lower bound; no dedicated idle VCD
+    strict_acceptance:
+      gate_level_golden_pass: true
+      gate_level_timing_clean: true
+      all_nets_from_gate_vcd: true
+      all_synthesis_invariants_annotated: true
+      active_vcd_window_applied: true
+      leaf_annotation_meets_threshold: true
+      dc_setup_hold_clean: true
+      ptpx_setup_hold_clean: true
+      no_physical_constraint_violations: true
+      power_report_present: true
+      analysis_coverage_has_no_violations: true
+      no_fatal_ptpx_errors: true
+  pingpong_chunk_ctrl:
+    composition_group: streaming_leaf
+    simulator_eligible: true
+    counters:
+    - point_engine_busy_cycles
+    instances: 1
+    gate_level_workload:
+      cycles: 515
+    dc_1ghz:
+      cell_area: 2313.233955
+      comb_area: 1098.972014
+      seq_area: 1214.261941
+      cells: 2379
+      setup_slack_ns: 0.000275
+      hold_slack_ns: 0.031545
+      check_design_lint_counts:
+        LINT-1: 6
+    gate_vcd:
+      path: build/activity/pingpong_chunk_ctrl.vcd
+      sha256: 53e81a4c246fc8c297ebcce1c0ec663a76b5277d8c91f600e82969d07ba59260
+      annotated_nets: 2595
+      total_nets: 2595
+      nets_from_vcd_pct: 100.0
+      fully_annotated_leaf_cells: 2378
+      total_leaf_cells: 2378
+      fully_annotated_leaf_cells_pct: 100.0
+      minimum_leaf_cells_pct: 99.8
+      timing_violations: 0
+      analysis_start_ns: 5.0
+      analysis_end_ns: 515.5
+      analysis_duration_ns: 510.5
+      annotated_synthesis_invariant_points: 703
+      total_synthesis_invariant_points: 703
+    testbench:
+      path: tb/tb_pingpong_chunk_activity.v
+      sha256: 6028893cd256b7f40c056758e2bf88521954767af3165c102b052db65f431c69
+      pass_regex: PINGPONG_ACTIVITY_PASS
+    ptpx_analysis_coverage:
+      setup:
+        total: 532
+        met: 532
+        violated: 0
+        untested: 0
+      hold:
+        total: 532
+        met: 532
+        violated: 0
+        untested: 0
+    ptpx_gate_vcd_power_w:
+      internal: 0.00156
+      switching: 3.91e-06
+      leakage: 3.59e-05
+      total: 0.0016
+    ptpx_timing:
+      setup_slack_ns: 0.0002751
+      hold_slack_ns: 0.03154547
+    energy_model:
+      active_total_pj_per_cycle: 1.6
+      active_dynamic_pj_per_cycle: 1.56391
+      inactive_leakage_pj_per_cycle: 0.035899999999999994
+      characterization: workload-averaged gate-VCD dynamic power
+      idle_model: leakage-only lower bound; no dedicated idle VCD
+    strict_acceptance:
+      gate_level_golden_pass: true
+      gate_level_timing_clean: true
+      all_nets_from_gate_vcd: true
+      all_synthesis_invariants_annotated: true
+      active_vcd_window_applied: true
+      leaf_annotation_meets_threshold: true
+      dc_setup_hold_clean: true
+      ptpx_setup_hold_clean: true
+      no_physical_constraint_violations: true
+      power_report_present: true
+      analysis_coverage_has_no_violations: true
+      no_fatal_ptpx_errors: true
+  quickfps_stream_subsystem:
+    composition_group: streaming_aggregate
+    simulator_eligible: true
+    counters:
+    - dma_busy_cycles
+    instances: 1
+    gate_level_workload:
+      cycles: 202
+      c: 8
+      d: 3
+      w: 3
+    dc_1ghz:
+      cell_area: 5004.215907
+      comb_area: 2519.496029
+      seq_area: 2484.719878
+      cells: 5556
+      setup_slack_ns: 7.5e-05
+      hold_slack_ns: 0.031545
+      check_design_lint_counts:
+        LINT-28: 6
+        LINT-29: 768
+        LINT-31: 9
+        LINT-52: 15
+        LINT-1: 14
+        LINT-32: 16
+        LINT-33: 3
+        LINT-2: 99
+    gate_vcd:
+      path: build/activity/quickfps_stream_subsystem.vcd
+      sha256: fa738dbeb673062e54cc04d5a06ce09db4c5c35187868096ce67af0e8734b6eb
+      annotated_nets: 6770
+      total_nets: 6770
+      nets_from_vcd_pct: 100.0
+      fully_annotated_leaf_cells: 5498
+      total_leaf_cells: 5498
+      fully_annotated_leaf_cells_pct: 100.0
+      minimum_leaf_cells_pct: 99.8
+      timing_violations: 0
+      analysis_start_ns: 5.0
+      analysis_end_ns: 202.5
+      analysis_duration_ns: 197.5
+      annotated_synthesis_invariant_points: 2043
+      total_synthesis_invariant_points: 2043
+    testbench:
+      path: tb/tb_quickfps_stream_subsystem.v
+      sha256: 7cf7edfcc50f4d6c1857a7050346d4e54a7571fee5d1f24304f724cec1fc55c1
+      pass_regex: STREAM_SUBSYSTEM_PASS
+    ptpx_analysis_coverage:
+      setup:
+        total: 1092
+        met: 1092
+        violated: 0
+        untested: 0
+      hold:
+        total: 1092
+        met: 1092
+        violated: 0
+        untested: 0
+    ptpx_gate_vcd_power_w:
+      internal: 0.00321
+      switching: 2.13e-05
+      leakage: 7.64e-05
+      total: 0.00331
+    ptpx_timing:
+      setup_slack_ns: 7.496e-05
+      hold_slack_ns: 0.03154547
+    energy_model:
+      active_total_pj_per_cycle: 3.3099999999999996
+      active_dynamic_pj_per_cycle: 3.2313
+      inactive_leakage_pj_per_cycle: 0.0764
+      characterization: workload-averaged gate-VCD dynamic power
+      idle_model: leakage-only lower bound; no dedicated idle VCD
+    strict_acceptance:
+      gate_level_golden_pass: true
+      gate_level_timing_clean: true
+      all_nets_from_gate_vcd: true
+      all_synthesis_invariants_annotated: true
+      active_vcd_window_applied: true
+      leaf_annotation_meets_threshold: true
+      dc_setup_hold_clean: true
+      ptpx_setup_hold_clean: true
+      no_physical_constraint_violations: true
+      power_report_present: true
+      analysis_coverage_has_no_violations: true
+      no_fatal_ptpx_errors: true
+rtl_cycle_validation:
+  bucket_decision_pipe:
+    accepted: 16
+    first_latency: 5
+    initial_ii1_window: 10
+    outputs: 16
+  cycle_model_cycles: 760
+  cycle_model_iterations: 3
+  pingpong_chunk_ctrl:
+    bucket_done_cycle: 78
+    chunks: 3
+    events: 25
+    slot_order:
+    - 0
+    - 1
+    - 0
+  point_engine:
+    accept_cycle: 4
+    latency: 39
+    pe_cols: 4
+    pe_rows: 4
+    push_cycle: 43
+    reference_merge_count: 3
+    reference_num_points: 48
+  sequences:
+    cycle_reordered_indices:
+    - 0
+    - 7
+    - 3
+    rtl_original_indices:
+    - 0
+    - 7
+    - 3
+    - 5
+    workload_original_indices:
+    - 0
+    - 7
+    - 3
+    - 5
+    workload_reordered_indices:
+    - 0
+    - 7
+    - 3
+    - 5
+  status: pass
+  stream_subsystem:
+    coordinate_bursts: 8
+    cycles: 202
+    distance_read_bursts: 3
+    distance_write_bursts: 3
+excluded: {}

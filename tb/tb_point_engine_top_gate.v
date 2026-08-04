@@ -12,8 +12,10 @@ module tb_point_engine_top_gate;
     localparam NUM_POINTS = 48;
     localparam MERGE_COUNT = 3;
     localparam PASSES = (MERGE_COUNT + 1 + L - 1) / L;
+    localparam POINT_IO_PIPELINE_CYCLES = 1;
     localparam EXPECTED_LATENCY =
-        PASSES * ((NUM_POINTS / R) + (6 * L)) + 2;
+        PASSES * ((NUM_POINTS / R) + (6 * L)) + 2 +
+        POINT_IO_PIPELINE_CYCLES;
 
     reg clk = 1'b0;
     always #0.5 clk = ~clk;
@@ -39,6 +41,7 @@ module tb_point_engine_top_gate;
     integer cycle_count = 0;
     integer accept_cycle = -1;
     integer lane;
+    reg bkt_fire_q = 1'b0;
 
     function [31:0] fp_x;
         input [3:0] value;
@@ -82,9 +85,9 @@ module tb_point_engine_top_gate;
 
     always @(posedge clk) begin
         cycle_count <= cycle_count + 1;
+        bkt_fire_q <= bkt_ren && !bkt_empty;
         if (bkt_ren && !bkt_empty) begin
             accept_cycle <= cycle_count;
-            bkt_empty <= 1'b1;
             $display("PTOP_ACCEPT %0d", cycle_count);
         end
         if (fp_wen) begin
@@ -108,15 +111,19 @@ module tb_point_engine_top_gate;
         end
     end
 
+    always @(negedge clk) begin
+        if (bkt_fire_q)
+            bkt_empty <= 1'b1;
+    end
+
     initial begin
         $dumpfile("activity_1ghz/point_engine_top_gate.vcd");
         $dumpvars(0, tb_point_engine_top_gate.dut);
     end
-initial begin
-        repeat (3) @(posedge clk);
-        rst_n <= 1'b1;
-        @(posedge clk);
-
+    initial begin
+        // Preload the bucket payload while reset is active. Only the empty
+        // flag is released later, so the mapped input cone receives a full
+        // setup interval before the command handshake.
         bkt_rdata[0 +: BIDX_W] = 9'd2;
         bkt_rdata[BIDX_W +: ADDR_W] = 32'd0;
         bkt_rdata[BIDX_W+ADDR_W +: NUMP_W] = NUM_POINTS[NUMP_W-1:0];
@@ -125,7 +132,15 @@ initial begin
         bkt_rdata[BIDX_W+ADDR_W+NUMP_W+64 +: 32] = 32'h00000000;
         bkt_rdata[BIDX_W+ADDR_W+NUMP_W+96 +: MCNT_W] =
             MERGE_COUNT[MCNT_W-1:0];
-        bkt_empty <= 1'b0;
+
+        repeat (3) @(negedge clk);
+        rst_n <= 1'b1;
+
+        // Drive the command just after a sampling edge. This models the
+        // registered producer assumed by the input-delay constraint and gives
+        // the mapped bkt_empty control cone nearly one full cycle to settle.
+        @(posedge clk);
+        #0.1 bkt_empty <= 1'b0;
 
         repeat (128) @(posedge clk);
         $fatal(1, "PTOP timeout");

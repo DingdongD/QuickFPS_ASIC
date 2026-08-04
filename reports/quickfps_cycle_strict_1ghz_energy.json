@@ -1,0 +1,140 @@
+{
+  "clock_hz": 1000000000.0,
+  "composition_rule": "Do not sum modules from streaming_leaf and streaming_aggregate in the same estimate. SRAM macro energy is intentionally absent.",
+  "modules": {
+    "axi_burst_reader": {
+      "active_pj_per_cycle": 0.675,
+      "cell_area": 1047.059982,
+      "composition_group": "streaming_leaf",
+      "counter_mode": "cycle",
+      "counters": [
+        "coord_read_busy_cycles",
+        "dist_read_busy_cycles"
+      ],
+      "event_pj": 0.0,
+      "idle_pj_per_cycle": 0.0162,
+      "instances": 2,
+      "source_module": "axi_burst_reader",
+      "strict_gate_vcd": true
+    },
+    "axi_burst_writer": {
+      "active_pj_per_cycle": 0.7460000000000001,
+      "cell_area": 1152.26998,
+      "composition_group": "streaming_leaf",
+      "counter_mode": "cycle",
+      "counters": [
+        "dist_write_busy_cycles"
+      ],
+      "event_pj": 0.0,
+      "idle_pj_per_cycle": 0.0177,
+      "instances": 1,
+      "source_module": "axi_burst_writer",
+      "strict_gate_vcd": true
+    },
+    "bucket_decision_pipe": {
+      "active_pj_per_cycle": 18.499999999999996,
+      "cell_area": 37342.871718,
+      "composition_group": "bucket_frontend",
+      "counter_mode": "cycle",
+      "counters": [
+        "bucket_pipeline_active_cycles"
+      ],
+      "event_pj": 0.0,
+      "idle_pj_per_cycle": 0.628,
+      "instances": 1,
+      "source_module": "bucket_decision_pipe",
+      "strict_gate_vcd": true
+    },
+    "pingpong_chunk_ctrl": {
+      "active_pj_per_cycle": 1.6,
+      "cell_area": 2313.233955,
+      "composition_group": "streaming_leaf",
+      "counter_mode": "cycle",
+      "counters": [
+        "point_engine_busy_cycles"
+      ],
+      "event_pj": 0.0,
+      "idle_pj_per_cycle": 0.035899999999999994,
+      "instances": 1,
+      "source_module": "pingpong_chunk_ctrl",
+      "strict_gate_vcd": true
+    },
+    "point_engine_top": {
+      "active_pj_per_cycle": 49.9,
+      "cell_area": 144251.225206,
+      "composition_group": "compute",
+      "counter_mode": "cycle",
+      "counters": [
+        "point_compute_cycles"
+      ],
+      "event_pj": 0.0,
+      "idle_pj_per_cycle": 2.39,
+      "instances": 1,
+      "source_module": "point_engine_top",
+      "strict_gate_vcd": true
+    }
+  },
+  "process": "TSMC28 HPC+ BWP40P140 SSG 0.81V 125C",
+  "rtl_cycle_validation": {
+    "bucket_decision_pipe": {
+      "accepted": 16,
+      "first_latency": 5,
+      "initial_ii1_window": 10,
+      "outputs": 16
+    },
+    "cycle_model_cycles": 760,
+    "cycle_model_iterations": 3,
+    "pingpong_chunk_ctrl": {
+      "bucket_done_cycle": 78,
+      "chunks": 3,
+      "events": 25,
+      "slot_order": [
+        0,
+        1,
+        0
+      ]
+    },
+    "point_engine": {
+      "accept_cycle": 4,
+      "latency": 39,
+      "pe_cols": 4,
+      "pe_rows": 4,
+      "push_cycle": 43,
+      "reference_merge_count": 3,
+      "reference_num_points": 48
+    },
+    "sequences": {
+      "cycle_reordered_indices": [
+        0,
+        7,
+        3
+      ],
+      "rtl_original_indices": [
+        0,
+        7,
+        3,
+        5
+      ],
+      "workload_original_indices": [
+        0,
+        7,
+        3,
+        5
+      ],
+      "workload_reordered_indices": [
+        0,
+        7,
+        3,
+        5
+      ]
+    },
+    "status": "pass",
+    "stream_subsystem": {
+      "coordinate_bursts": 8,
+      "cycles": 202,
+      "distance_read_bursts": 3,
+      "distance_write_bursts": 3
+    }
+  },
+  "schema_version": 2
+}

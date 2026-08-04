@@ -42,7 +42,8 @@ module point_engine_top #(
     wire [31:0]       bf_sz   = bkt_rdata[OFF_SX+64 +: 32];
     wire [MCNT_W-1:0] bf_mcnt = bkt_rdata[OFF_SX+96 +: MCNT_W];
 
-    localparam T_IDLE=0, T_LDMERGE=1, T_STREAM=2, T_COLLECT=3, T_PUSH=4;
+    localparam T_IDLE=0, T_LDMERGE=1, T_STREAM=2, T_COLLECT=3, T_PUSH=4,
+               T_COLLECT_CAPTURE=5;
     reg [2:0]         st;
     reg [BIDX_W-1:0]  r_bid;
     reg [PIDX_W-1:0]  r_base;
@@ -54,6 +55,9 @@ module point_engine_top #(
     reg [NUMP_W-1:0]  in_batch, cap_batch;
     reg [FP_W-1:0]    fp_hold;
     reg [7:0]         r_mcnt_ext;
+    reg [PIDX_W-1:0] co_addr_q, di_raddr_q;
+    reg [R-1:0] issue_valid_q;
+    reg [R*LIDX_W-1:0] issue_idx_q;
 
     wire last_pass = (pass == r_npass - 8'd1);
     assign bkt_ren = (st == T_IDLE) && !bkt_empty;
@@ -96,20 +100,19 @@ module point_engine_top #(
     wire [PIDX_W-1:0] far_word_base =
         r_base + ((far_idx >> R_LOG2) << R_LOG2);
 
-    assign co_addr  = (st == T_COLLECT) ? far_word_base : stream_addr;
-    assign di_raddr = stream_addr;
+    assign co_addr  = co_addr_q;
+    assign di_raddr = di_raddr_q;
 
     genvar g;
     generate
         for (g = 0; g < R; g = g + 1) begin : g_lane
-            wire [PIDX_W:0] lane_pos = batch_base_ext + g;
-            assign in_idx[g*LIDX_W +: LIDX_W] = lane_pos[LIDX_W-1:0];
+            assign in_idx[g*LIDX_W +: LIDX_W] =
+                issue_idx_q[g*LIDX_W +: LIDX_W];
             assign in_x[g*32 +: 32] = co_rdata[g*96      +: 32];
             assign in_y[g*32 +: 32] = co_rdata[g*96 + 32 +: 32];
             assign in_z[g*32 +: 32] = co_rdata[g*96 + 64 +: 32];
             assign in_dist[g*32 +: 32] = di_rdata[g*32 +: 32];
-            assign in_valid[g] = streaming &&
-                                 (lane_pos < {{(PIDX_W+1-NUMP_W){1'b0}}, r_nump});
+            assign in_valid[g] = issue_valid_q[g];
         end
     endgenerate
 
@@ -147,6 +150,7 @@ module point_engine_top #(
 
     wire any_row_valid = |o_row_valid;
 
+    integer lane_i;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             st          <= T_IDLE;
@@ -164,7 +168,12 @@ module point_engine_top #(
             cap_batch   <= {NUMP_W{1'b0}};
             fp_hold     <= {FP_W{1'b0}};
             r_mcnt_ext  <= 8'd0;
+            co_addr_q   <= {PIDX_W{1'b0}};
+            di_raddr_q  <= {PIDX_W{1'b0}};
+            issue_valid_q <= {R{1'b0}};
+            issue_idx_q <= {R*LIDX_W{1'b0}};
         end else begin
+            issue_valid_q <= {R{1'b0}};
             case (st)
                 T_IDLE: begin
                     if (!bkt_empty) begin
@@ -196,7 +205,18 @@ module point_engine_top #(
 
                 T_LDMERGE: begin
                     if (c == L-1) begin
-                        in_batch  <= {NUMP_W{1'b0}};
+                        // Register the first SRAM request while leaving the
+                        // merge-load state. The response and its metadata are
+                        // consumed by the PE array on the following edge.
+                        co_addr_q  <= r_base;
+                        di_raddr_q <= r_base;
+                        issue_valid_q <= {R{1'b0}};
+                        for (lane_i = 0; lane_i < R; lane_i = lane_i + 1) begin
+                            issue_idx_q[lane_i*LIDX_W +: LIDX_W] <= lane_i;
+                            if (lane_i < r_nump)
+                                issue_valid_q[lane_i] <= 1'b1;
+                        end
+                        in_batch  <= {{(NUMP_W-1){1'b0}}, 1'b1};
                         cap_batch <= {NUMP_W{1'b0}};
                         st <= T_STREAM;
                     end else begin
@@ -205,8 +225,18 @@ module point_engine_top #(
                 end
 
                 T_STREAM: begin
-                    if (in_batch < r_nbatch)
+                    if (in_batch < r_nbatch) begin
+                        co_addr_q  <= stream_addr;
+                        di_raddr_q <= stream_addr;
+                        for (lane_i = 0; lane_i < R; lane_i = lane_i + 1) begin
+                            issue_idx_q[lane_i*LIDX_W +: LIDX_W] <=
+                                batch_base_ext[LIDX_W-1:0] + lane_i;
+                            if ((batch_base_ext + lane_i) <
+                                {{(PIDX_W+1-NUMP_W){1'b0}}, r_nump})
+                                issue_valid_q[lane_i] <= 1'b1;
+                        end
                         in_batch <= in_batch + {{(NUMP_W-1){1'b0}}, 1'b1};
+                    end
 
                     if (any_row_valid)
                         cap_batch <= cap_batch + {{(NUMP_W-1){1'b0}}, 1'b1};
@@ -224,6 +254,11 @@ module point_engine_top #(
                 end
 
                 T_COLLECT: begin
+                    co_addr_q <= far_word_base;
+                    st <= T_COLLECT_CAPTURE;
+                end
+
+                T_COLLECT_CAPTURE: begin
                     if (far_valid) begin
                         fp_hold <= {r_bid, r_base + far_idx,
                                     far_dist, far_co};

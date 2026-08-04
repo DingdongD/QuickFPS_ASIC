@@ -25,6 +25,7 @@ activity/
 activity_*/
 
 # Local simulator and Python outputs
+/build/
 *.vvp
 *.out
 *.log
@@ -42,3 +43,5 @@ reports/*
 !reports/point_engine_tb_reference.json
 !reports/quickfps_large_1ghz_ppa_20260803_063034.yaml
 !reports/quickfps_strict_tops_1ghz_ppa_20260803_190839.yaml
+!reports/quickfps_cycle_strict_1ghz_ppa.yaml
+!reports/quickfps_cycle_strict_1ghz_energy.json

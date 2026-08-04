@@ -26,6 +26,10 @@ module tb_axi_burst_reader_activity;
     integer cycle = 0;
     integer burst_count = 0;
     reg [31:0] lfsr = 32'h1357_9bdf;
+    reg ar_fire_q = 1'b0;
+    reg r_fire_q = 1'b0;
+    reg [7:0] arlen_q = 8'd0;
+    reg [ADDR_W-1:0] araddr_q = {ADDR_W{1'b0}};
 
     assign rvalid = beats_left > 0;
     assign rlast = beats_left == 1;
@@ -50,18 +54,11 @@ module tb_axi_burst_reader_activity;
 
     always @(posedge clk) begin
         cycle <= cycle + 1;
-        lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
-        out_ready <= (cycle % 7 != 0);
-
+        ar_fire_q <= arvalid && arready;
+        r_fire_q <= rvalid && rready;
         if (arvalid && arready) begin
-            if (beats_left != 0)
-                $fatal(1, "overlapping read burst");
-            beats_left <= arlen + 1;
-            burst_count <= burst_count + 1;
-            if ((araddr[11:0] + ((arlen + 1) * (DATA_W/8))) > 4096)
-                $fatal(1, "read burst crossed a 4KB boundary");
-        end else if (rvalid && rready) begin
-            beats_left <= beats_left - 1;
+            arlen_q <= arlen;
+            araddr_q <= araddr;
         end
 
         if (done) begin
@@ -74,14 +71,30 @@ module tb_axi_burst_reader_activity;
         end
     end
 
+    always @(negedge clk) begin
+        lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
+        out_ready <= (cycle % 7 != 0);
+
+        if (ar_fire_q) begin
+            if (beats_left != 0)
+                $fatal(1, "overlapping read burst");
+            beats_left <= arlen_q + 1;
+            burst_count <= burst_count + 1;
+            if ((araddr_q[11:0] + ((arlen_q + 1) * (DATA_W/8))) > 4096)
+                $fatal(1, "read burst crossed a 4KB boundary");
+        end else if (r_fire_q) begin
+            beats_left <= beats_left - 1;
+        end
+    end
+
     initial begin
         $dumpfile("build/activity/axi_burst_reader.vcd");
         $dumpvars(0, tb_axi_burst_reader_activity.dut);
-        repeat (5) @(posedge clk);
+        repeat (5) @(negedge clk);
         rst_n <= 1'b1;
-        @(posedge clk);
+        @(negedge clk);
         cmd_valid <= 1'b1;
-        @(posedge clk);
+        @(negedge clk);
         cmd_valid <= 1'b0;
         repeat (2000) @(posedge clk);
         $fatal(1, "reader timeout");
