@@ -91,11 +91,15 @@ module tb_pingpong_chunk_ctrl;
             if (coord_timer >= 0) $fatal(1, "overlapping coord command");
             coord_timer <= 5;
             coord_count <= coord_count + 1;
+            $display("QTRACE cycle=%0d component=pingpong event=coord_cmd chunk=%0d addr=%0d bytes=%0d",
+                     cycle, coord_count, coord_cmd_addr, coord_cmd_bytes);
             if (coord_cmd_addr < bucket_coord_addr)
                 $fatal(1, "coordinate address escaped coordinate region");
         end else if (coord_timer == 0) begin
             coord_done <= 1'b1;
             coord_timer <= -1;
+            $display("QTRACE cycle=%0d component=pingpong event=coord_done chunk=%0d",
+                     cycle, coord_count-1);
         end else if (coord_timer > 0) begin
             coord_timer <= coord_timer - 1;
         end
@@ -104,11 +108,15 @@ module tb_pingpong_chunk_ctrl;
             if (dist_timer >= 0) $fatal(1, "overlapping dist-read command");
             dist_timer <= 7;
             dist_count <= dist_count + 1;
+            $display("QTRACE cycle=%0d component=pingpong event=dist_read_cmd chunk=%0d addr=%0d bytes=%0d",
+                     cycle, dist_count, dist_rd_cmd_addr, dist_rd_cmd_bytes);
             if (dist_rd_cmd_addr < bucket_dist_addr)
                 $fatal(1, "MDT read address escaped distance region");
         end else if (dist_timer == 0) begin
             dist_rd_done <= 1'b1;
             dist_timer <= -1;
+            $display("QTRACE cycle=%0d component=pingpong event=dist_read_done chunk=%0d",
+                     cycle, dist_count-1);
         end else if (dist_timer > 0) begin
             dist_timer <= dist_timer - 1;
         end
@@ -117,11 +125,15 @@ module tb_pingpong_chunk_ctrl;
             if (compute_timer >= 0) $fatal(1, "overlapping compute command");
             compute_timer <= 11;
             compute_count <= compute_count + 1;
+            $display("QTRACE cycle=%0d component=pingpong event=compute_start chunk=%0d slot=%0d points=%0d",
+                     cycle, compute_count, compute_slot, compute_point_count);
             if (compute_merge_count != 8'd5)
                 $fatal(1, "merge count mismatch");
         end else if (compute_timer == 0) begin
             compute_done <= 1'b1;
             compute_timer <= -1;
+            $display("QTRACE cycle=%0d component=pingpong event=compute_done chunk=%0d",
+                     cycle, compute_count-1);
         end else if (compute_timer > 0) begin
             compute_timer <= compute_timer - 1;
         end
@@ -130,11 +142,15 @@ module tb_pingpong_chunk_ctrl;
             if (write_timer >= 0) $fatal(1, "overlapping write command");
             write_timer <= 6;
             write_count <= write_count + 1;
+            $display("QTRACE cycle=%0d component=pingpong event=dist_write_cmd chunk=%0d addr=%0d bytes=%0d",
+                     cycle, write_count, dist_wr_cmd_addr, dist_wr_cmd_bytes);
             if (dist_wr_cmd_addr < bucket_dist_addr)
                 $fatal(1, "MDT write address escaped distance region");
         end else if (write_timer == 0) begin
             dist_wr_done <= 1'b1;
             write_timer <= -1;
+            $display("QTRACE cycle=%0d component=pingpong event=dist_write_done chunk=%0d",
+                     cycle, write_count-1);
         end else if (write_timer > 0) begin
             write_timer <= write_timer - 1;
         end
@@ -146,6 +162,7 @@ module tb_pingpong_chunk_ctrl;
                          coord_count, dist_count, write_count, compute_count);
                 $fatal(1);
             end
+            $display("QTRACE cycle=%0d component=pingpong event=bucket_done chunks=3", cycle);
             $display("CHUNK_CTRL_PASS cycles=%0d", cycle);
             $finish;
         end
