@@ -30,6 +30,7 @@ module tb_pingpong_chunk_activity;
     wire compute_slot;
     reg compute_done = 1'b0;
     integer coord_timer=-1, dist_timer=-1, write_timer=-1, compute_timer=-1;
+    integer coord_count=0, dist_count=0, write_count=0, compute_count=0;
     integer cycle=0;
 
     pingpong_chunk_ctrl #(
@@ -38,7 +39,9 @@ module tb_pingpong_chunk_activity;
     ) dut (
         .clk(clk), .rst_n(rst_n),
         .bucket_valid(bucket_valid), .bucket_ready(bucket_ready),
-        .bucket_point_ptr(64'd4096), .bucket_point_count(16'd1200),
+        .bucket_coord_addr(64'h0000_0000_0000_4000),
+        .bucket_dist_addr(64'h0000_0000_1000_4000),
+        .bucket_point_count(16'd1200),
         .bucket_merge_count(8'd9), .bucket_done(bucket_done), .busy(busy),
         .coord_cmd_valid(coord_cmd_valid), .coord_cmd_ready(coord_cmd_ready),
         .coord_cmd_addr(coord_cmd_addr), .coord_cmd_bytes(coord_cmd_bytes),
@@ -66,24 +69,46 @@ module tb_pingpong_chunk_activity;
         dist_wr_cmd_ready <= (cycle % 7 != 0);
         compute_ready <= (cycle % 17 != 0);
 
-        if (coord_cmd_valid && coord_cmd_ready) coord_timer <= 18;
-        else if (coord_timer == 0) begin coord_done <= 1'b1; coord_timer <= -1; end
-        else if (coord_timer > 0) coord_timer <= coord_timer - 1;
+        if (coord_cmd_valid && coord_cmd_ready) begin
+            if (coord_timer >= 0) $fatal(1, "overlapping coordinate command");
+            coord_timer <= 18;
+            coord_count <= coord_count + 1;
+        end else if (coord_timer == 0) begin
+            coord_done <= 1'b1;
+            coord_timer <= -1;
+        end else if (coord_timer > 0) coord_timer <= coord_timer - 1;
 
-        if (dist_rd_cmd_valid && dist_rd_cmd_ready) dist_timer <= 14;
-        else if (dist_timer == 0) begin dist_rd_done <= 1'b1; dist_timer <= -1; end
-        else if (dist_timer > 0) dist_timer <= dist_timer - 1;
+        if (dist_rd_cmd_valid && dist_rd_cmd_ready) begin
+            if (dist_timer >= 0) $fatal(1, "overlapping MDT read command");
+            dist_timer <= 14;
+            dist_count <= dist_count + 1;
+        end else if (dist_timer == 0) begin
+            dist_rd_done <= 1'b1;
+            dist_timer <= -1;
+        end else if (dist_timer > 0) dist_timer <= dist_timer - 1;
 
-        if (compute_start && compute_ready)
+        if (compute_start && compute_ready) begin
+            if (compute_timer >= 0) $fatal(1, "overlapping compute command");
             compute_timer <= 30 + compute_point_count / 4;
-        else if (compute_timer == 0) begin compute_done <= 1'b1; compute_timer <= -1; end
-        else if (compute_timer > 0) compute_timer <= compute_timer - 1;
+            compute_count <= compute_count + 1;
+        end else if (compute_timer == 0) begin
+            compute_done <= 1'b1;
+            compute_timer <= -1;
+        end else if (compute_timer > 0) compute_timer <= compute_timer - 1;
 
-        if (dist_wr_cmd_valid && dist_wr_cmd_ready) write_timer <= 12;
-        else if (write_timer == 0) begin dist_wr_done <= 1'b1; write_timer <= -1; end
-        else if (write_timer > 0) write_timer <= write_timer - 1;
+        if (dist_wr_cmd_valid && dist_wr_cmd_ready) begin
+            if (write_timer >= 0) $fatal(1, "overlapping MDT write command");
+            write_timer <= 12;
+            write_count <= write_count + 1;
+        end else if (write_timer == 0) begin
+            dist_wr_done <= 1'b1;
+            write_timer <= -1;
+        end else if (write_timer > 0) write_timer <= write_timer - 1;
 
         if (bucket_done) begin
+            if (coord_count != 5 || dist_count != 5 ||
+                write_count != 5 || compute_count != 5)
+                $fatal(1, "expected five complete chunk transactions");
             $display("PINGPONG_ACTIVITY_PASS cycles=%0d", cycle);
             $finish;
         end
