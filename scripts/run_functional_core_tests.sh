@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD="${ROOT}/build/functional"
-mkdir -p "${BUILD}"
+mkdir -p "${BUILD}" "${ROOT}/build/activity"
 mapfile -t RTL_FILES < <(find "${ROOT}/RTL" -type f -name '*.v' | sort)
 
 run_tb() {
@@ -13,7 +13,7 @@ run_tb() {
     echo "[compile] ${top}"
     iverilog -g2012 -Wall -s "${top}" -o "${out}" "${tb}" "${RTL_FILES[@]}"
     echo "[run] ${top}"
-    vvp "${out}"
+    (cd "${ROOT}" && vvp "${out}")
 }
 
 run_tb tb_max_tree4_tie "${ROOT}/tb/tb_max_tree4_tie.v"
@@ -21,5 +21,6 @@ run_tb tb_point_engine_top_tail "${ROOT}/tb/tb_point_engine_top_tail.v"
 run_tb tb_point_engine_top_cycle "${ROOT}/tb/tb_point_engine_top_cycle.v"
 run_tb tb_quickfps_core_end2end "${ROOT}/tb/tb_quickfps_core_end2end.v"
 run_tb tb_pingpong_chunk_ctrl "${ROOT}/tb/tb_pingpong_chunk_ctrl.v"
+run_tb tb_axi_dma_activity "${ROOT}/tb/tb_axi_dma_activity.v"
 
 echo "FUNCTIONAL_CORE_TESTS_PASS"
