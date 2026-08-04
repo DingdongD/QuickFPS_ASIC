@@ -1,9 +1,10 @@
-name: Functional Core
+name: Functional and Cycle Models
 
 on:
   push:
     branches:
       - feature/complete-functional-core
+      - feature/cycle-accurate-system
   pull_request:
 
 jobs:
@@ -46,3 +47,33 @@ jobs:
 
       - name: Run RTL functional regressions
         run: bash scripts/run_functional_core_tests.sh
+
+      - name: Run cycle model unit tests
+        env:
+          PYTHONPATH: cmodel
+        run: python3 -m unittest discover -s cmodel/tests -v
+
+      - name: Generate algorithm trace and simulate cycles
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          python3 cmodel/generate_workload.py \
+            --preprocessed build/preprocessed \
+            --samples 4 \
+            --output build/quickfps_workload.json
+          python3 -m quickfps_cycle.cli \
+            --workload build/quickfps_workload.json \
+            --chunk-points 4 \
+            --bucket-fifo-depth 2 \
+            --far-fifo-depth 2 \
+            --output build/cycle_result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          workload = json.loads(Path('build/quickfps_workload.json').read_text())
+          result = json.loads(Path('build/cycle_result.json').read_text())
+          assert workload['metadata']['expected_sequence'] == [0, 7, 3, 5]
+          assert result['iterations'] == 3
+          assert result['cycles'] > 0
+          assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
+          PY
