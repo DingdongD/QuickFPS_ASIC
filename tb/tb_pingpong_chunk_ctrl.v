@@ -10,7 +10,8 @@ module tb_pingpong_chunk_ctrl;
 
     reg bucket_valid = 1'b0;
     wire bucket_ready;
-    reg [ADDR_W-1:0] bucket_point_ptr = 64'd1024;
+    reg [ADDR_W-1:0] bucket_coord_addr = 64'h0000_0000_0000_1000;
+    reg [ADDR_W-1:0] bucket_dist_addr = 64'h0000_0000_1000_1000;
     reg [COUNT_W-1:0] bucket_point_count = 16'd600;
     reg [MCNT_W-1:0] bucket_merge_count = 8'd5;
     wire bucket_done;
@@ -57,7 +58,8 @@ module tb_pingpong_chunk_ctrl;
     ) dut (
         .clk(clk), .rst_n(rst_n),
         .bucket_valid(bucket_valid), .bucket_ready(bucket_ready),
-        .bucket_point_ptr(bucket_point_ptr),
+        .bucket_coord_addr(bucket_coord_addr),
+        .bucket_dist_addr(bucket_dist_addr),
         .bucket_point_count(bucket_point_count),
         .bucket_merge_count(bucket_merge_count),
         .bucket_done(bucket_done), .busy(busy),
@@ -89,6 +91,8 @@ module tb_pingpong_chunk_ctrl;
             if (coord_timer >= 0) $fatal(1, "overlapping coord command");
             coord_timer <= 5;
             coord_count <= coord_count + 1;
+            if (coord_cmd_addr < bucket_coord_addr)
+                $fatal(1, "coordinate address escaped coordinate region");
         end else if (coord_timer == 0) begin
             coord_done <= 1'b1;
             coord_timer <= -1;
@@ -100,6 +104,8 @@ module tb_pingpong_chunk_ctrl;
             if (dist_timer >= 0) $fatal(1, "overlapping dist-read command");
             dist_timer <= 7;
             dist_count <= dist_count + 1;
+            if (dist_rd_cmd_addr < bucket_dist_addr)
+                $fatal(1, "MDT read address escaped distance region");
         end else if (dist_timer == 0) begin
             dist_rd_done <= 1'b1;
             dist_timer <= -1;
@@ -124,6 +130,8 @@ module tb_pingpong_chunk_ctrl;
             if (write_timer >= 0) $fatal(1, "overlapping write command");
             write_timer <= 6;
             write_count <= write_count + 1;
+            if (dist_wr_cmd_addr < bucket_dist_addr)
+                $fatal(1, "MDT write address escaped distance region");
         end else if (write_timer == 0) begin
             dist_wr_done <= 1'b1;
             write_timer <= -1;
