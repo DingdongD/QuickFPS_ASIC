@@ -5,7 +5,11 @@ module quickfps_core_top #(
     parameter ADDR_W  = 32,
     parameter MCNT_W  = 8,
     parameter MB_CAP  = 32,
-    parameter FIFO_DEPTH = 8,
+    // The functional Bucket-Engine drains completed buckets after traversal.
+    // Size the request/return FIFOs for the maximum supported bucket count to
+    // avoid a structural deadlock before the optimized concurrent collector is
+    // introduced.
+    parameter FIFO_DEPTH = 512,
     parameter L = 4,
     parameter R = 4,
     parameter LIDX_W = 11,
@@ -164,6 +168,11 @@ module quickfps_core_top #(
     );
 
     // synopsys translate_off
+    initial begin
+        if (FIFO_DEPTH < BUCKETS)
+            $fatal(1, "quickfps_core_top: functional collector requires FIFO_DEPTH>=BUCKETS");
+    end
+
     always @(posedge clk) begin
         if (busy && (host_bb_wen || host_coord_wen || host_dist_wen))
             $fatal(1, "quickfps_core_top: host memory writes are not allowed while busy");
