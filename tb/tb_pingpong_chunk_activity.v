@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 module tb_pingpong_chunk_activity;
     localparam ADDR_W = 64;
-    localparam COUNT_W = 16;
+    localparam COUNT_W = 24;
     localparam MCNT_W = 8;
     reg clk = 1'b0;
     always #0.5 clk = ~clk;
@@ -33,15 +33,12 @@ module tb_pingpong_chunk_activity;
     integer coord_count=0, dist_count=0, write_count=0, compute_count=0;
     integer cycle=0;
 
-    pingpong_chunk_ctrl #(
-        .ADDR_W(ADDR_W), .COUNT_W(COUNT_W), .MCNT_W(MCNT_W),
-        .CHUNK_POINTS(256), .COORD_BYTES(12), .DIST_BYTES(4)
-    ) dut (
+    pingpong_chunk_ctrl dut (
         .clk(clk), .rst_n(rst_n),
         .bucket_valid(bucket_valid), .bucket_ready(bucket_ready),
         .bucket_coord_addr(64'h0000_0000_0000_4000),
         .bucket_dist_addr(64'h0000_0000_1000_4000),
-        .bucket_point_count(16'd1200),
+        .bucket_point_count(24'd1200),
         .bucket_merge_count(8'd9), .bucket_done(bucket_done), .busy(busy),
         .coord_cmd_valid(coord_cmd_valid), .coord_cmd_ready(coord_cmd_ready),
         .coord_cmd_addr(coord_cmd_addr), .coord_cmd_bytes(coord_cmd_bytes),
