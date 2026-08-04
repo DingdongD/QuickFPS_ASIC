@@ -37,7 +37,8 @@
       "strip_path": "tb_quickfps_stream_subsystem/dut",
       "vcd": "build/activity/quickfps_stream_subsystem.vcd",
       "counters": ["dma_busy_cycles"],
-      "note": "integrated control plus two readers and one writer; do not sum with its leaf-module estimates"
+      "default_characterize": false,
+      "note": "integrated control plus two readers and one writer; characterize as an alternative aggregate and do not sum with leaf-module estimates"
     },
     "sram_1r1w_ptpx": {
       "testbench": "tb/tb_sram_1r1w_activity.v",
