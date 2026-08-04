@@ -1,0 +1,38 @@
+{
+  "clock_period_ns": 1.0,
+  "modules": {
+    "axi_burst_reader": {
+      "testbench": "tb/tb_axi_burst_reader_activity.v",
+      "testbench_top": "tb_axi_burst_reader_activity",
+      "strip_path": "tb_axi_burst_reader_activity/dut",
+      "vcd": "build/activity/axi_burst_reader.vcd",
+      "counter": "dma_transactions"
+    },
+    "axi_burst_writer": {
+      "testbench": "tb/tb_axi_burst_writer_activity.v",
+      "testbench_top": "tb_axi_burst_writer_activity",
+      "strip_path": "tb_axi_burst_writer_activity/dut",
+      "vcd": "build/activity/axi_burst_writer.vcd",
+      "counter": "dma_transactions"
+    },
+    "pingpong_chunk_ctrl": {
+      "testbench": "tb/tb_pingpong_chunk_activity.v",
+      "testbench_top": "tb_pingpong_chunk_activity",
+      "strip_path": "tb_pingpong_chunk_activity/dut",
+      "vcd": "build/activity/pingpong_chunk_ctrl.vcd",
+      "counter": "point_engine_busy_cycles"
+    },
+    "sram_1r1w_sync": {
+      "testbench": "tb/tb_sram_1r1w_activity.v",
+      "testbench_top": "tb_sram_1r1w_activity",
+      "strip_path": "tb_sram_1r1w_activity/dut",
+      "vcd": "build/activity/sram_1r1w_sync.vcd",
+      "counter": "cycles"
+    }
+  },
+  "existing_strict_modules": {
+    "bucket_cd": "scripts/run_remote_quickfps_gate_1ghz.sh",
+    "pe": "scripts/run_remote_quickfps_gate_1ghz.sh",
+    "point_engine": "scripts/run_remote_quickfps_large_1ghz_bg.sh"
+  }
+}
