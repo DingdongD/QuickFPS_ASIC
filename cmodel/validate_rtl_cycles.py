@@ -26,6 +26,20 @@ def text(path: Path) -> str:
     return path.read_text(errors="replace")
 
 
+def load_reorder_map(path: Path) -> Dict[int, int]:
+    mapping: Dict[int, int] = {}
+    for line in text(path).splitlines():
+        if not line.strip():
+            continue
+        reordered, original = (int(value) for value in line.split())
+        if reordered in mapping:
+            raise AssertionError(f"duplicate reordered index {reordered}")
+        mapping[reordered] = original
+    if not mapping:
+        raise AssertionError("reorder map is empty")
+    return mapping
+
+
 def validate_point_engine(log_dir: Path) -> Dict[str, int]:
     content = text(log_dir / "tb_point_engine_top_cycle.log")
     accepts = [int(value) for value in PTOP_ACCEPT.findall(content)]
@@ -142,18 +156,50 @@ def validate_pingpong_trace(log_dir: Path) -> Dict[str, object]:
     }
 
 
-def validate_functional_sequence(log_dir: Path, workload: Dict[str, object]) -> List[int]:
+def rtl_functional_sequence(log_dir: Path) -> List[int]:
     content = text(log_dir / "tb_quickfps_core_end2end.log")
     match = CORE_SEQUENCE.search(content)
     if not match:
         raise AssertionError("full-core RTL sequence marker is missing")
-    rtl_sequence = [int(value) for value in match.group(1).split(",")]
-    expected = [int(value) for value in workload["metadata"]["expected_sequence"]]  # type: ignore[index]
-    if rtl_sequence != expected:
+    return [int(value) for value in match.group(1).split(",")]
+
+
+def validate_sequence_domains(
+    log_dir: Path,
+    workload: Dict[str, object],
+    reorder_map_path: Path,
+    cycle_result: Dict[str, object],
+) -> Dict[str, List[int]]:
+    rtl_original = rtl_functional_sequence(log_dir)
+    workload_reordered = [
+        int(value) for value in workload["metadata"]["expected_sequence"]  # type: ignore[index]
+    ]
+    reorder_map = load_reorder_map(reorder_map_path)
+    try:
+        workload_original = [reorder_map[index] for index in workload_reordered]
+    except KeyError as error:
+        raise AssertionError(f"workload index missing from reorder map: {error.args[0]}") from error
+
+    # The host KD-tree uses nth-element partitioning, so a leaf is contiguous
+    # but not sorted. Workload/C-model indices are in this reordered memory
+    # domain, while the fixed RTL smoke test reports the original point IDs.
+    if rtl_original != workload_original:
         raise AssertionError(
-            f"RTL sequence {rtl_sequence} does not match workload sequence {expected}"
+            "mapped workload sequence does not match the original-index RTL "
+            f"sequence: workload={workload_original}, rtl={rtl_original}"
         )
-    return rtl_sequence
+    cycle_reordered = [int(value) for value in cycle_result["sampled_indices"]]  # type: ignore[index]
+    if cycle_reordered != workload_reordered[:-1]:
+        raise AssertionError(
+            "C-model iteration sequence diverges from the reordered workload: "
+            f"cycle={cycle_reordered}, workload={workload_reordered[:-1]}"
+        )
+    return {
+        "rtl_original_indices": rtl_original,
+        "workload_reordered_indices": workload_reordered,
+        "workload_original_indices": workload_original,
+        "cycle_reordered_indices": cycle_reordered,
+    }
 
 
 def validate_stream_subsystem(log_dir: Path) -> Dict[str, int]:
@@ -177,6 +223,7 @@ def main() -> int:
     parser.add_argument("--log-dir", type=Path, required=True)
     parser.add_argument("--workload", type=Path, required=True)
     parser.add_argument("--cycle-result", type=Path, required=True)
+    parser.add_argument("--reorder-map", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -185,7 +232,9 @@ def main() -> int:
     point = validate_point_engine(args.log_dir)
     bucket = validate_bucket_pipe(args.log_dir)
     pingpong = validate_pingpong_trace(args.log_dir)
-    sequence = validate_functional_sequence(args.log_dir, workload)
+    sequences = validate_sequence_domains(
+        args.log_dir, workload, args.reorder_map, cycle_result
+    )
     stream = validate_stream_subsystem(args.log_dir)
 
     accelerator = cycle_result["config"]["accelerator"]
@@ -202,15 +251,13 @@ def main() -> int:
         raise AssertionError(
             f"C-model 48-point latency {expected_latency} != RTL {point['latency']}"
         )
-    if cycle_result["sampled_indices"] != sequence[:-1]:
-        raise AssertionError("C-model iteration sequence diverges from RTL/workload")
 
     summary = {
         "point_engine": point,
         "bucket_decision_pipe": bucket,
         "pingpong_chunk_ctrl": pingpong,
         "stream_subsystem": stream,
-        "rtl_sequence": sequence,
+        "sequences": sequences,
         "cycle_model_cycles": int(cycle_result["cycles"]),
         "cycle_model_iterations": int(cycle_result["iterations"]),
         "status": "pass",
