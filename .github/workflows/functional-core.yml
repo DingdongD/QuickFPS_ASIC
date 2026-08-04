@@ -1,4 +1,4 @@
-name: Functional Core RTL
+name: Functional Core
 
 on:
   push:
@@ -7,11 +7,42 @@ on:
   pull_request:
 
 jobs:
-  iverilog:
+  functional:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Icarus Verilog
+
+      - name: Install RTL tools
         run: sudo apt-get update && sudo apt-get install -y iverilog
-      - name: Run functional regressions
+
+      - name: Build host preprocessing
+        run: |
+          cmake -S HOST -B build/host -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/host --parallel 2
+
+      - name: Test KD-tree preprocessing and metadata generation
+        run: |
+          build/host/quickfps_preprocess \
+            --input HOST/test_points.xyz \
+            --buckets 2 \
+            --samples 4 \
+            --repeat 2 \
+            --out build/preprocessed
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('build/preprocessed')
+          manifest = json.loads((root / 'manifest.json').read_text())
+          assert manifest['point_count'] == 8, manifest
+          assert manifest['bucket_count'] == 2, manifest
+          assert manifest['bucket_m_register'] == 1, manifest
+          assert manifest['sample_count'] == 4, manifest
+          assert len((root / 'coords.hex').read_text().splitlines()) == 8
+          assert len((root / 'dist.hex').read_text().splitlines()) == 8
+          assert len((root / 'buckets.hex').read_text().splitlines()) == 2
+          assert len((root / 'golden_indices.txt').read_text().splitlines()) == 4
+          PY
+
+      - name: Run RTL functional regressions
         run: bash scripts/run_functional_core_tests.sh
