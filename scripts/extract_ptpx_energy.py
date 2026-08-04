@@ -5,7 +5,7 @@ import argparse
 import json
 import re
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
 POWER_RE = re.compile(
     r"(?P<label>Total\s+Dynamic\s+Power|Cell\s+Leakage\s+Power)\s*=\s*"
@@ -39,30 +39,52 @@ def parse_report(path: Path) -> Tuple[float, float]:
     return dynamic_w, leakage_w
 
 
+def counter_list(spec: Dict[str, Any]) -> List[str]:
+    raw = spec.get("counters", spec.get("counter", []))
+    if isinstance(raw, str):
+        return [raw]
+    if isinstance(raw, list) and all(isinstance(item, str) for item in raw):
+        return list(raw)
+    raise ValueError(f"invalid PTPX counter mapping: {raw!r}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path("build/ptpx"))
+    parser.add_argument("--manifest", type=Path)
     parser.add_argument("--clock-hz", type=float, default=1.0e9)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("modules", nargs="+")
     args = parser.parse_args()
 
-    modules: Dict[str, Dict[str, float]] = {}
+    specs: Dict[str, Any] = {}
+    if args.manifest:
+        specs = json.loads(args.manifest.read_text()).get("modules", {})
+
+    modules: Dict[str, Dict[str, Any]] = {}
     for module in args.modules:
         report = args.root / module / "reports_ptpx" / "power_summary.rpt"
         dynamic_w, leakage_w = parse_report(report)
+        spec = specs.get(module, {})
         modules[module] = {
             "active_pj_per_cycle": dynamic_w / args.clock_hz * 1.0e12,
             "idle_pj_per_cycle": leakage_w / args.clock_hz * 1.0e12,
-            "event_pj": 0.0,
+            "event_pj": float(spec.get("event_pj", 0.0)),
+            "counters": counter_list(spec) if spec else [],
+            "counter_mode": spec.get("counter_mode", "cycle"),
             "source_dynamic_w": dynamic_w,
             "source_leakage_w": leakage_w,
+            "source_report": str(report),
+            "note": spec.get("note", ""),
         }
 
     output = {
         "clock_hz": args.clock_hz,
         "modules": modules,
-        "note": "active_pj_per_cycle is VCD-averaged dynamic energy at the characterization clock",
+        "note": (
+            "active_pj_per_cycle is VCD-averaged dynamic energy at the "
+            "characterization clock; counters select active cycle windows"
+        ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n")
