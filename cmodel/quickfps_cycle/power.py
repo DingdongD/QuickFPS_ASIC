@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Mapping, Sequence, Tuple
+from typing import Dict, Mapping, Sequence, Tuple
 
 
 @dataclass(frozen=True)
@@ -20,9 +20,9 @@ class PTPXEnergyModel:
     """Map cycle counters to post-synthesis PTPX energy estimates.
 
     ``active_pj_per_cycle`` is obtained from VCD-driven PTPX average dynamic
-    power divided by the characterization clock.  A module may list multiple
+    power divided by the characterization clock. A module may list multiple
     counters when the same characterized RTL is instantiated more than once;
-    for example, one AXI reader model is applied to coordinate and MDT readers.
+    one AXI reader model is applied to coordinate and MDT reader activity.
     """
 
     DEFAULT_COUNTER_MAP: Mapping[str, Tuple[str, ...]] = {
@@ -30,11 +30,12 @@ class PTPXEnergyModel:
         "bucket_decision_pipe": ("bucket_pipeline_active_cycles",),
         "point_engine": ("point_engine_busy_cycles",),
         "pingpong_chunk_ctrl": ("point_engine_busy_cycles",),
+        "quickfps_stream_subsystem": ("dma_busy_cycles",),
         "axi_burst_reader": (
-            "coord_reader_busy_cycles",
-            "dist_reader_busy_cycles",
+            "coord_read_busy_cycles",
+            "dist_read_busy_cycles",
         ),
-        "axi_burst_writer": ("dist_writer_busy_cycles",),
+        "axi_burst_writer": ("dist_write_busy_cycles",),
         "sram_1r1w_ptpx": ("point_engine_busy_cycles",),
         "dma": ("dma_busy_cycles",),
         "dram": ("cycles",),
@@ -92,7 +93,6 @@ class PTPXEnergyModel:
             if energy.counter_mode == "event":
                 value = active_or_events * energy.event_pj
                 value += total_cycles * energy.instances * energy.idle_pj_per_cycle
-                active_cycles = 0
             elif energy.counter_mode == "cycle":
                 capacity_cycles = total_cycles * energy.instances
                 active_cycles = min(active_or_events, capacity_cycles)
