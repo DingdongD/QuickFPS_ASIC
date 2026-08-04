@@ -77,3 +77,11 @@ jobs:
           assert result['cycles'] > 0
           assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
           PY
+
+      - name: Validate cycle-model assumptions against RTL traces
+        run: |
+          python3 cmodel/validate_rtl_cycles.py \
+            --log-dir build/functional \
+            --workload build/quickfps_workload.json \
+            --cycle-result build/cycle_result.json \
+            --output build/rtl_cycle_validation.json
