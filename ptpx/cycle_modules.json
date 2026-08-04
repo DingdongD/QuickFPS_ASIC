@@ -22,12 +22,13 @@
       "vcd": "build/activity/pingpong_chunk_ctrl.vcd",
       "counter": "point_engine_busy_cycles"
     },
-    "sram_1r1w_sync": {
+    "sram_1r1w_ptpx": {
       "testbench": "tb/tb_sram_1r1w_activity.v",
       "testbench_top": "tb_sram_1r1w_activity",
       "strip_path": "tb_sram_1r1w_activity/dut",
       "vcd": "build/activity/sram_1r1w_sync.vcd",
-      "counter": "cycles"
+      "counter": "cycles",
+      "note": "adapter/control plus inferred-array activity; replace array energy with compiler-macro data for final SRAM power"
     }
   },
   "existing_strict_modules": {
