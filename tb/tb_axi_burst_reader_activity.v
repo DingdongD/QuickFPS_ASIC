@@ -13,10 +13,10 @@ module tb_axi_burst_reader_activity;
     wire [7:0] arlen;
     wire [2:0] arsize;
     wire [1:0] arburst;
-    reg rvalid = 1'b0;
+    wire rvalid;
     wire rready;
-    reg [DATA_W-1:0] rdata = {DATA_W{1'b0}};
-    reg rlast = 1'b0;
+    wire [DATA_W-1:0] rdata;
+    wire rlast;
     wire out_valid;
     reg out_ready = 1'b1;
     wire [DATA_W-1:0] out_data;
@@ -24,7 +24,12 @@ module tb_axi_burst_reader_activity;
     wire [31:0] bytes_completed;
     integer beats_left = 0;
     integer cycle = 0;
+    integer burst_count = 0;
     reg [31:0] lfsr = 32'h1357_9bdf;
+
+    assign rvalid = beats_left > 0;
+    assign rlast = beats_left == 1;
+    assign rdata = {8{lfsr}};
 
     axi_burst_reader #(
         .ADDR_W(ADDR_W), .DATA_W(DATA_W), .MAX_BURST_BEATS(16)
@@ -46,25 +51,25 @@ module tb_axi_burst_reader_activity;
     always @(posedge clk) begin
         cycle <= cycle + 1;
         lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
-        rdata <= {8{lfsr}};
         out_ready <= (cycle % 7 != 0);
+
         if (arvalid && arready) begin
-            if (beats_left != 0) $fatal(1, "overlapping read burst");
+            if (beats_left != 0)
+                $fatal(1, "overlapping read burst");
             beats_left <= arlen + 1;
+            burst_count <= burst_count + 1;
+            if ((araddr[11:0] + ((arlen + 1) * (DATA_W/8))) > 4096)
+                $fatal(1, "read burst crossed a 4KB boundary");
+        end else if (rvalid && rready) begin
+            beats_left <= beats_left - 1;
         end
-        if (beats_left > 0) begin
-            rvalid <= 1'b1;
-            rlast <= (beats_left == 1);
-            if (rvalid && rready)
-                beats_left <= beats_left - 1;
-        end else begin
-            rvalid <= 1'b0;
-            rlast <= 1'b0;
-        end
+
         if (done) begin
             if (bytes_completed != 32'd1600)
                 $fatal(1, "reader byte count mismatch");
-            $display("AXI_READER_PASS cycles=%0d", cycle);
+            if (burst_count != 4)
+                $fatal(1, "expected four read bursts, got %0d", burst_count);
+            $display("AXI_READER_PASS cycles=%0d bursts=%0d", cycle, burst_count);
             $finish;
         end
     end
