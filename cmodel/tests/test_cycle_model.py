@@ -3,8 +3,9 @@ from __future__ import annotations
 import unittest
 
 from quickfps_cycle.config import AcceleratorConfig, DramConfig
+from quickfps_cycle.cycle_model import QuickFPSCycleModel
 from quickfps_cycle.memory import BankedDramModel, MemoryRequest
-from quickfps_cycle.model import QuickFPSCycleModel, _PointEngineSystem
+from quickfps_cycle.model import _PointEngineSystem
 from quickfps_cycle.workload import synthetic_workload
 
 
@@ -60,6 +61,9 @@ class SystemTimingTest(unittest.TestCase):
         self.assertGreater(result.counters["axi_bursts"], 0)
         self.assertGreater(result.counters["dram_transactions"], result.counters["axi_bursts"])
         self.assertEqual(result.memory_stats["accepted"], result.memory_stats["completed"])
+        self.assertGreater(result.memory_stats["coord_read_busy_cycles"], 0)
+        self.assertGreater(result.memory_stats["dist_read_busy_cycles"], 0)
+        self.assertGreater(result.memory_stats["dist_write_busy_cycles"], 0)
 
     def test_axi_and_dram_granularities_are_separate(self) -> None:
         workload = synthetic_workload([300], iterations=1, issue_all=True)
@@ -71,6 +75,21 @@ class SystemTimingTest(unittest.TestCase):
         self.assertEqual(result.counters["axi_bursts"], 14)
         self.assertEqual(result.counters["dram_transactions"], 95)
         self.assertEqual(result.counters["dma_commands"], 3)
+
+    def test_bucket_decision_credits_bound_inflight_work(self) -> None:
+        workload = synthetic_workload([32] * 20, iterations=1, issue_all=True)
+        config = AcceleratorConfig(
+            bucket_decision_fifo_depth=4,
+            bucket_fifo_depth=1,
+            far_fifo_depth=1,
+            chunk_points=32,
+            max_cycles=2_000_000,
+        )
+        result = QuickFPSCycleModel(workload, accelerator=config).run()
+        self.assertLessEqual(result.counters["bucket_reserved_credit_max"], 4)
+        self.assertGreater(result.counters["bucket_decision_credit_stall_cycles"], 0)
+        self.assertEqual(result.counters["issued_buckets"], 20)
+        self.assertEqual(result.counters["bucket_completions"], 20)
 
 
 if __name__ == "__main__":
