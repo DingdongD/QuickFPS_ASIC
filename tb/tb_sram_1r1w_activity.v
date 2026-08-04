@@ -1,7 +1,6 @@
 `timescale 1ns/1ps
 module tb_sram_1r1w_activity;
     localparam WIDTH = 128;
-    localparam DEPTH = 256;
     localparam AW = 8;
     reg clk = 1'b0;
     always #0.5 clk = ~clk;
@@ -20,9 +19,7 @@ module tb_sram_1r1w_activity;
     integer responses = 0;
     reg [31:0] lfsr = 32'hdead_beef;
 
-    sram_1r1w_sync #(
-        .WIDTH(WIDTH), .DEPTH(DEPTH), .AW(AW), .READ_LATENCY(2)
-    ) dut (
+    sram_1r1w_ptpx dut (
         .clk(clk), .rst_n(rst_n),
         .rd_valid(rd_valid), .rd_ready(rd_ready), .rd_addr(rd_addr),
         .rsp_valid(rsp_valid), .rsp_data(rsp_data),
