@@ -77,14 +77,17 @@ def main() -> int:
     output = result.to_dict(include_events=not args.no_events)
     output["memory_backend"] = "dramsim3" if memory_backend else "analytical"
     if args.ptpx_energy:
+        activity = dict(result.counters)
+        activity.update(result.memory_stats)
         output["energy"] = PTPXEnergyModel.load(args.ptpx_energy).estimate(
-            result.counters, result.cycles
+            activity, result.cycles
         )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n")
     print(
         f"cycles={result.cycles} seconds={result.seconds:.9f} "
-        f"dma_transactions={result.counters.get('dma_transactions', 0)} "
+        f"axi_bursts={result.counters.get('axi_bursts', 0)} "
+        f"dram_transactions={result.counters.get('dram_transactions', 0)} "
         f"backend={output['memory_backend']}"
     )
     if memory_backend is not None:
