@@ -6,35 +6,45 @@
       "testbench_top": "tb_bucket_decision_activity",
       "strip_path": "tb_bucket_decision_activity/dut",
       "vcd": "build/activity/bucket_decision_pipe.vcd",
-      "counter": "bucket_pipeline_active_cycles"
+      "counters": ["bucket_pipeline_active_cycles"]
     },
     "axi_burst_reader": {
       "testbench": "tb/tb_axi_burst_reader_activity.v",
       "testbench_top": "tb_axi_burst_reader_activity",
       "strip_path": "tb_axi_burst_reader_activity/dut",
       "vcd": "build/activity/axi_burst_reader.vcd",
-      "counter": "dma_transactions"
+      "counters": ["coord_read_busy_cycles", "dist_read_busy_cycles"],
+      "instances": 2,
+      "note": "one characterized RTL is applied independently to coordinate and MDT reader instances"
     },
     "axi_burst_writer": {
       "testbench": "tb/tb_axi_burst_writer_activity.v",
       "testbench_top": "tb_axi_burst_writer_activity",
       "strip_path": "tb_axi_burst_writer_activity/dut",
       "vcd": "build/activity/axi_burst_writer.vcd",
-      "counter": "dma_transactions"
+      "counters": ["dist_write_busy_cycles"]
     },
     "pingpong_chunk_ctrl": {
       "testbench": "tb/tb_pingpong_chunk_activity.v",
       "testbench_top": "tb_pingpong_chunk_activity",
       "strip_path": "tb_pingpong_chunk_activity/dut",
       "vcd": "build/activity/pingpong_chunk_ctrl.vcd",
-      "counter": "point_engine_busy_cycles"
+      "counters": ["point_engine_busy_cycles"]
+    },
+    "quickfps_stream_subsystem": {
+      "testbench": "tb/tb_quickfps_stream_subsystem.v",
+      "testbench_top": "tb_quickfps_stream_subsystem",
+      "strip_path": "tb_quickfps_stream_subsystem/dut",
+      "vcd": "build/activity/quickfps_stream_subsystem.vcd",
+      "counters": ["dma_busy_cycles"],
+      "note": "integrated control plus two readers and one writer; do not sum with its leaf-module estimates"
     },
     "sram_1r1w_ptpx": {
       "testbench": "tb/tb_sram_1r1w_activity.v",
       "testbench_top": "tb_sram_1r1w_activity",
       "strip_path": "tb_sram_1r1w_activity/dut",
       "vcd": "build/activity/sram_1r1w_sync.vcd",
-      "counter": "cycles",
+      "counters": ["point_engine_busy_cycles"],
       "note": "adapter/control plus inferred-array activity; replace array energy with compiler-macro data for final SRAM power"
     }
   },
