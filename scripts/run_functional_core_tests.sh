@@ -21,6 +21,8 @@ run_tb tb_point_engine_top_tail "${ROOT}/tb/tb_point_engine_top_tail.v"
 run_tb tb_point_engine_top_cycle "${ROOT}/tb/tb_point_engine_top_cycle.v"
 run_tb tb_quickfps_core_end2end "${ROOT}/tb/tb_quickfps_core_end2end.v"
 run_tb tb_pingpong_chunk_ctrl "${ROOT}/tb/tb_pingpong_chunk_ctrl.v"
+run_tb tb_axi_burst_reader_activity "${ROOT}/tb/tb_axi_burst_reader_activity.v"
+run_tb tb_axi_burst_writer_activity "${ROOT}/tb/tb_axi_burst_writer_activity.v"
 run_tb tb_axi_dma_activity "${ROOT}/tb/tb_axi_dma_activity.v"
 
 echo "FUNCTIONAL_CORE_TESTS_PASS"
