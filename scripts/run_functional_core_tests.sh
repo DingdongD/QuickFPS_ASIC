@@ -29,5 +29,6 @@ run_tb tb_sram_1r1w_activity "${ROOT}/tb/tb_sram_1r1w_activity.v"
 run_tb tb_axi_burst_reader_activity "${ROOT}/tb/tb_axi_burst_reader_activity.v"
 run_tb tb_axi_burst_writer_activity "${ROOT}/tb/tb_axi_burst_writer_activity.v"
 run_tb tb_axi_dma_activity "${ROOT}/tb/tb_axi_dma_activity.v"
+run_tb tb_quickfps_stream_subsystem "${ROOT}/tb/tb_quickfps_stream_subsystem.v"
 
 echo "FUNCTIONAL_CORE_TESTS_PASS"
