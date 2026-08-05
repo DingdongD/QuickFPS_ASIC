@@ -1,0 +1,25 @@
+name: Native Bucket Scheduler
+
+on:
+  push:
+    branches:
+      - feature/closed-loop-cycle-simulator
+  pull_request:
+
+jobs:
+  native-scheduler:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build native scheduler
+        run: bash scripts/build_native_scheduler.sh
+
+      - name: Run native/Python differential tests
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          LIB=$(find build/native_scheduler -name 'libquickfps_bucket_scheduler.so' -print -quit)
+          test -f "$LIB"
+          QFPS_NATIVE_SCHEDULER_LIB="$LIB" \
+            python3 -m unittest cmodel.tests.test_native_bucket_scheduler -v
