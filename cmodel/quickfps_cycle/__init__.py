@@ -1,6 +1,7 @@
 """Cycle-accurate timing and closed-loop functional model for QuickFPS."""
 
 from .closed_loop import ClosedLoopQuickFPSCycleModel
+from .closed_loop_strict import StrictClosedLoopQuickFPSCycleModel
 from .config import AcceleratorConfig, DramConfig
 from .cycle_model import QuickFPSCycleModel
 from .model import SimulationResult
@@ -12,6 +13,7 @@ __all__ = [
     "DramConfig",
     "QuickFPSCycleModel",
     "ClosedLoopQuickFPSCycleModel",
+    "StrictClosedLoopQuickFPSCycleModel",
     "SimulationResult",
     "Point3",
     "BucketDescriptor",
