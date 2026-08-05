@@ -5,6 +5,7 @@ on:
     branches:
       - feature/complete-functional-core
       - feature/cycle-accurate-system
+      - feature/closed-loop-cycle-simulator
   pull_request:
 
 jobs:
@@ -58,7 +59,36 @@ jobs:
           PYTHONPATH: cmodel
         run: python3 -m unittest discover -s cmodel/tests -v
 
-      - name: Generate algorithm trace and simulate cycles
+      - name: Run strict closed-loop FPS from KD-tree partitions
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          python3 -m quickfps_cycle \
+            --preprocessed build/preprocessed \
+            --samples 4 \
+            --chunk-points 4 \
+            --bucket-fifo-depth 2 \
+            --far-fifo-depth 2 \
+            --output build/closed_loop_result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path('build/closed_loop_result.json').read_text())
+          assert result['mode'] == 'closed-loop'
+          assert result['config']['scheduler'] == 'closed-loop-strict-pre-edge'
+          assert result['sampled_indices'] == [0, 7, 3, 5], result
+          assert result['sampled_indices_original'] == [0, 7, 3, 5], result
+          assert result['matches_golden'] is True
+          assert result['iterations'] == 3
+          assert result['counters']['bucket_cd_inputs'] == 6
+          assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
+          assert result['counters']['functional_distance_evaluations'] > 0
+          assert result['memory_stats']['accepted'] == result['memory_stats']['completed']
+          assert result['final_functional_state']['finite_mdt_count'] == 8
+          PY
+
+      - name: Generate algorithm trace and simulate replay cycles
         env:
           PYTHONPATH: cmodel
         run: |
@@ -78,13 +108,14 @@ jobs:
           workload = json.loads(Path('build/quickfps_workload.json').read_text())
           result = json.loads(Path('build/cycle_result.json').read_text())
           assert workload['metadata']['expected_sequence'] == [0, 7, 3, 5]
+          assert result['mode'] == 'trace-replay'
           assert result['iterations'] == 3
           assert result['cycles'] > 0
           assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
           assert result['counters']['dram_transactions'] > result['counters']['axi_bursts']
           PY
 
-      - name: Validate cycle-model assumptions against RTL traces
+      - name: Validate replay cycle-model assumptions against RTL traces
         run: |
           python3 cmodel/validate_rtl_cycles.py \
             --log-dir build/functional \
@@ -123,7 +154,7 @@ jobs:
           CFG=build/dramsim3_bridge/_deps/dramsim3_external-src/configs/DDR4_8Gb_x8_2400.ini
           test -f "$LIB"
           test -f "$CFG"
-          python3 -m quickfps_cycle.cli \
+          python3 -m quickfps_cycle \
             --workload build/dramsim3_workload.json \
             --chunk-points 128 \
             --bucket-fifo-depth 2 \
