@@ -76,7 +76,7 @@ jobs:
 
           result = json.loads(Path('build/closed_loop_result.json').read_text())
           assert result['mode'] == 'closed-loop'
-          assert result['config']['scheduler'] == 'closed-loop-strict-pre-edge-sram'
+          assert result['config']['scheduler'] == 'closed-loop-strict-pre-edge-sram-optimized'
           assert result['sampled_indices'] == [0, 7, 3, 5], result
           assert result['sampled_indices_original'] == [0, 7, 3, 5], result
           assert result['matches_golden'] is True
@@ -88,7 +88,9 @@ jobs:
           assert result['counters']['bucket_buffer_write_commits'] == result['counters']['bucket_completions']
           assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
           assert result['counters']['functional_distance_evaluations'] > 0
-          assert result['memory_stats']['accepted'] == result['memory_stats']['completed']
+          assert result['counters']['point_buffer_resident_mode'] == 1
+          assert result['counters'].get('dram_transactions', 0) == 0
+          assert result['memory_stats']['accepted'] == result['memory_stats']['completed'] == 0
           assert result['final_functional_state']['finite_mdt_count'] == 8
           PY
 
