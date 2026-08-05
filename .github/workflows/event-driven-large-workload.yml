@@ -60,4 +60,38 @@ jobs:
           assert result['counters']['bucket_cd_inputs'] == 6
           assert result['counters']['point_buffer_resident_mode'] == 1
           assert result['counters']['dram_transactions'] == 0
+          strict = dict(result)
+          strict['mode'] = 'closed-loop'
+          strict['cycles'] = int(result['cycles'] * 1.1)
+          Path('build/strict_fixture.json').write_text(json.dumps(strict))
+          PY
+
+      - name: Generate and reload a calibration profile
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          python3 scripts/calibrate_event_dram.py \
+            --pair build/strict_fixture.json build/event_result.json \
+            --output build/event_dram_calibration.json
+          LIB=$(find build/event_sim -name 'libquickfps_event_sim.so' -print -quit)
+          python3 -m quickfps_cycle.event_cli \
+            --preprocessed build/preprocessed \
+            --samples 4 \
+            --event-sim-lib "$LIB" \
+            --dram-calibration build/event_dram_calibration.json \
+            --chunk-points 4 \
+            --bucket-fifo-depth 2 \
+            --point-buffer-mode resident \
+            --progress-every 0 \
+            --output build/event_calibrated_result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          profile = json.loads(Path('build/event_dram_calibration.json').read_text())
+          result = json.loads(Path('build/event_calibrated_result.json').read_text())
+          assert profile['read_latency_scale'] > 0
+          assert profile['write_latency_scale'] > 0
+          assert result['result_classification']['dram_calibration']['source']
+          assert result['sampled_indices'] == [0, 7, 3, 5]
           PY
