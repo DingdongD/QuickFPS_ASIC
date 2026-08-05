@@ -5,13 +5,11 @@ import json
 from pathlib import Path
 
 from .batched_dramsim3 import ClockScaledBatchedDramSim3Backend
-from .batched_optimized_closed_loop import (
-    BatchedOptimizedStrictClosedLoopQuickFPSCycleModel,
-)
 from .config import AcceleratorConfig, DramConfig
 from .power import PTPXEnergyModel
 from .preprocessed import PreprocessedImage
 from .strict_cycle_model import StrictQuickFPSCycleModel
+from .summary_closed_loop import SummaryStrictClosedLoopQuickFPSCycleModel
 from .workload import Workload, synthetic_workload
 
 
@@ -198,7 +196,7 @@ def main() -> int:
     if args.preprocessed:
         image = PreprocessedImage.load(args.preprocessed)
         bucket_count = len(image.buckets)
-        closed_loop_model = BatchedOptimizedStrictClosedLoopQuickFPSCycleModel(
+        closed_loop_model = SummaryStrictClosedLoopQuickFPSCycleModel(
             image,
             sample_count=_sample_count(args, image),
             first_sample=args.first_sample,
@@ -260,6 +258,9 @@ def main() -> int:
                 "numpy"
                 if result.counters.get("functional_numpy_enabled", 0)
                 else "scalar"
+            ),
+            "event_trace_materialized": bool(
+                result.config.get("event_trace_materialized", True)
             ),
         }
         golden = _load_golden(args.preprocessed)
