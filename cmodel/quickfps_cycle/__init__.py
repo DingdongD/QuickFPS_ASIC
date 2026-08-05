@@ -1,9 +1,10 @@
-"""Cycle-accurate timing and closed-loop functional model for QuickFPS."""
+"""Cycle-accurate and event-driven functional models for QuickFPS."""
 
 from .closed_loop import ClosedLoopQuickFPSCycleModel
 from .closed_loop_strict import StrictClosedLoopQuickFPSCycleModel
 from .config import AcceleratorConfig, DramConfig
 from .cycle_model import QuickFPSCycleModel
+from .event_model import EventDramCalibration, EventDrivenQuickFPSModel
 from .model import SimulationResult
 from .native_closed_loop import NativeStrictClosedLoopQuickFPSCycleModel
 from .optimized_closed_loop import OptimizedStrictClosedLoopQuickFPSCycleModel
@@ -20,6 +21,8 @@ __all__ = [
     "OptimizedStrictClosedLoopQuickFPSCycleModel",
     "SummaryStrictClosedLoopQuickFPSCycleModel",
     "NativeStrictClosedLoopQuickFPSCycleModel",
+    "EventDramCalibration",
+    "EventDrivenQuickFPSModel",
     "SimulationResult",
     "Point3",
     "BucketDescriptor",

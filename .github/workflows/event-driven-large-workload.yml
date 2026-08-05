@@ -1,0 +1,97 @@
+name: Event-Driven Large Workload
+
+on:
+  push:
+    branches:
+      - feature/event-driven-large-workload-final
+  pull_request:
+
+jobs:
+  event-sim:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build event simulator and host preprocessor
+        run: |
+          bash scripts/build_event_sim.sh
+          cmake -S HOST -B build/host -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/host --parallel 2
+          build/host/quickfps_preprocess \
+            --input HOST/test_points.xyz \
+            --buckets 2 \
+            --samples 4 \
+            --out build/preprocessed
+
+      - name: Run functional differential tests
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          LIB=$(find build/event_sim -name 'libquickfps_event_sim.so' -print -quit)
+          test -f "$LIB"
+          QFPS_EVENT_SIM_LIB="$LIB" \
+            python3 -m unittest cmodel.tests.test_event_model -v
+
+      - name: Run public event-model CLI
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          LIB=$(find build/event_sim -name 'libquickfps_event_sim.so' -print -quit)
+          python3 -m quickfps_cycle.event_cli \
+            --preprocessed build/preprocessed \
+            --samples 4 \
+            --event-sim-lib "$LIB" \
+            --chunk-points 4 \
+            --bucket-fifo-depth 2 \
+            --point-buffer-mode resident \
+            --progress-every 0 \
+            --output build/event_result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path('build/event_result.json').read_text())
+          assert result['mode'] == 'closed-loop-event'
+          assert result['sampled_indices'] == [0, 7, 3, 5], result
+          assert result['matches_golden'] is True
+          assert result['config']['full_workload_executed'] is True
+          assert result['config']['extrapolated'] is False
+          assert result['result_classification']['extrapolation'] is False
+          assert result['counters']['bucket_cd_inputs'] == 6
+          assert result['counters']['point_buffer_resident_mode'] == 1
+          assert result['counters']['dram_transactions'] == 0
+          strict = dict(result)
+          strict['mode'] = 'closed-loop'
+          strict['cycles'] = int(result['cycles'] * 1.1)
+          Path('build/strict_fixture.json').write_text(json.dumps(strict))
+          PY
+
+      - name: Generate and reload a calibration profile
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          python3 scripts/calibrate_event_dram.py \
+            --pair build/strict_fixture.json build/event_result.json \
+            --output build/event_dram_calibration.json
+          LIB=$(find build/event_sim -name 'libquickfps_event_sim.so' -print -quit)
+          python3 -m quickfps_cycle.event_cli \
+            --preprocessed build/preprocessed \
+            --samples 4 \
+            --event-sim-lib "$LIB" \
+            --dram-calibration build/event_dram_calibration.json \
+            --chunk-points 4 \
+            --bucket-fifo-depth 2 \
+            --point-buffer-mode resident \
+            --progress-every 0 \
+            --output build/event_calibrated_result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          profile = json.loads(Path('build/event_dram_calibration.json').read_text())
+          result = json.loads(Path('build/event_calibrated_result.json').read_text())
+          assert profile['read_latency_scale'] > 0
+          assert profile['write_latency_scale'] > 0
+          assert result['result_classification']['dram_calibration']['source']
+          assert result['sampled_indices'] == [0, 7, 3, 5]
+          PY
