@@ -76,12 +76,16 @@ jobs:
 
           result = json.loads(Path('build/closed_loop_result.json').read_text())
           assert result['mode'] == 'closed-loop'
-          assert result['config']['scheduler'] == 'closed-loop-strict-pre-edge'
+          assert result['config']['scheduler'] == 'closed-loop-strict-pre-edge-sram'
           assert result['sampled_indices'] == [0, 7, 3, 5], result
           assert result['sampled_indices_original'] == [0, 7, 3, 5], result
           assert result['matches_golden'] is True
           assert result['iterations'] == 3
           assert result['counters']['bucket_cd_inputs'] == 6
+          assert result['counters']['bucket_buffer_read_requests'] == 6
+          assert result['counters']['bucket_buffer_read_responses'] == 6
+          assert result['counters']['bucket_buffer_write_requests'] == result['counters']['issued_buckets']
+          assert result['counters']['bucket_buffer_write_commits'] == result['counters']['bucket_completions']
           assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
           assert result['counters']['functional_distance_evaluations'] > 0
           assert result['memory_stats']['accepted'] == result['memory_stats']['completed']
@@ -207,6 +211,7 @@ jobs:
           assert result['memory_backend'] == 'dramsim3'
           assert result['sampled_indices'] == [0, 7, 3, 5], result
           assert result['matches_golden'] is True
+          assert result['counters']['bucket_buffer_read_requests'] == 6
           assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
           assert result['memory_stats']['accepted'] == result['memory_stats']['completed']
           PY
