@@ -4,6 +4,7 @@ from collections import Counter
 from typing import List, Sequence, Tuple
 
 from . import closed_loop_strict as strict_module
+from .closed_loop import FunctionalChunk, FunctionalPointTask
 from .memory import MemoryRequest
 from .model import SimulationResult, TraceEvent
 from .optimized_closed_loop import (
@@ -17,6 +18,27 @@ class _BatchedOptimizedFunctionalPointEngineSystem(
     _OptimizedFunctionalPointEngineSystem
 ):
     """Use one C-ABI call per accelerator cycle for ready DRAM transactions."""
+
+    def _schedule_load(
+        self, task: FunctionalPointTask, chunk: FunctionalChunk, cycle: int
+    ) -> None:
+        if not self._resident_point_buffer:
+            self.counters["coord_read_bytes_requested"] += (
+                chunk.point_count * self.config.coord_bytes_per_point
+            )
+            self.counters["dist_read_bytes_requested"] += (
+                chunk.point_count * self.config.dist_bytes_per_point
+            )
+        super()._schedule_load(task, chunk, cycle)
+
+    def _schedule_write(
+        self, task: FunctionalPointTask, chunk: FunctionalChunk, cycle: int
+    ) -> None:
+        if not self._resident_point_buffer:
+            self.counters["dist_write_bytes_requested"] += (
+                chunk.point_count * self.config.dist_bytes_per_point
+            )
+        super()._schedule_write(task, chunk, cycle)
 
     def _select_batch(self, cycle: int) -> List[Tuple[str, MemoryRequest]]:
         selected: List[Tuple[str, MemoryRequest]] = []
