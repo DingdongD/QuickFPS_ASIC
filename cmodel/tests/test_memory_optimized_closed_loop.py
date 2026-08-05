@@ -8,6 +8,7 @@ from quickfps_cycle.optimized_closed_loop import (
     OptimizedStrictClosedLoopQuickFPSCycleModel,
 )
 from quickfps_cycle.preprocessed import BucketDescriptor, Point3, PreprocessedImage
+from quickfps_cycle.summary_closed_loop import SummaryStrictClosedLoopQuickFPSCycleModel
 
 
 def collinear_image(point_count: int = 8, bucket_count: int = 2) -> PreprocessedImage:
@@ -91,6 +92,40 @@ class PointBufferResidencyTest(unittest.TestCase):
         self.assertEqual(
             result.memory_stats["accepted"], result.memory_stats["completed"]
         )
+
+
+class EventSummaryModeTest(unittest.TestCase):
+    def test_no_events_preserves_cycles_state_and_counters(self) -> None:
+        config = AcceleratorConfig(
+            chunk_points=4,
+            point_buffer_mode="resident",
+            functional_kernel="scalar",
+            bucket_fifo_depth=2,
+            far_fifo_depth=2,
+        )
+        full_model = SummaryStrictClosedLoopQuickFPSCycleModel(
+            collinear_image(),
+            sample_count=4,
+            accelerator=config,
+            trace_events=True,
+        )
+        summary_model = SummaryStrictClosedLoopQuickFPSCycleModel(
+            collinear_image(),
+            sample_count=4,
+            accelerator=config,
+            trace_events=False,
+        )
+        full = full_model.run()
+        summary = summary_model.run()
+        self.assertEqual(summary.sampled_indices, full.sampled_indices)
+        self.assertEqual(summary.cycles, full.cycles)
+        self.assertEqual(summary.counters, full.counters)
+        self.assertEqual(summary.memory_stats, full.memory_stats)
+        self.assertEqual(summary_model.image.mdt, full_model.image.mdt)
+        self.assertGreater(len(full.events), 0)
+        self.assertEqual(summary.events, [])
+        self.assertTrue(full.config["event_trace_materialized"])
+        self.assertFalse(summary.config["event_trace_materialized"])
 
 
 class FunctionalKernelTest(unittest.TestCase):
