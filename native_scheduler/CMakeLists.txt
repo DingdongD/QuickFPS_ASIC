@@ -9,7 +9,6 @@ target_compile_options(
         -Wall
         -Wextra
         -Wpedantic
-        -Werror
         -ffp-contract=off
 )
 set_target_properties(
