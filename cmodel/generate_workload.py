@@ -2,181 +2,111 @@
 from __future__ import annotations
 
 import argparse
-import csv
-import json
 import math
-import struct
-from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import List, Sequence, Tuple
+from typing import List, Tuple
 
+from quickfps_cycle.preprocessed import PreprocessedImage, better, box_dist2, dist2, f32
 from quickfps_cycle.workload import BucketAction, BucketWork, IterationWork, Workload
-
-Point = Tuple[float, float, float]
-
-
-def f32(value: float) -> float:
-    return struct.unpack("<f", struct.pack("<f", value))[0]
-
-
-def bits_to_float(value: int) -> float:
-    return struct.unpack("<f", struct.pack("<I", value & 0xFFFFFFFF))[0]
-
-
-def dist2(a: Point, b: Point) -> float:
-    dx = f32(a[0] - b[0])
-    dy = f32(a[1] - b[1])
-    dz = f32(a[2] - b[2])
-    return f32(f32(f32(dx * dx) + f32(dy * dy)) + f32(dz * dz))
-
-
-def box_dist2(point: Point, minimum: Point, maximum: Point) -> float:
-    gaps = []
-    for value, lower, upper in zip(point, minimum, maximum):
-        if value < lower:
-            gaps.append(f32(lower - value))
-        elif value > upper:
-            gaps.append(f32(value - upper))
-        else:
-            gaps.append(0.0)
-    return f32(
-        f32(f32(gaps[0] * gaps[0]) + f32(gaps[1] * gaps[1]))
-        + f32(gaps[2] * gaps[2])
-    )
-
-
-def load_coords(path: Path) -> List[Point]:
-    points: List[Point] = []
-    for line in path.read_text().splitlines():
-        text = line.strip()
-        if not text:
-            continue
-        value = int(text, 16)
-        x = bits_to_float(value & 0xFFFFFFFF)
-        y = bits_to_float((value >> 32) & 0xFFFFFFFF)
-        z = bits_to_float((value >> 64) & 0xFFFFFFFF)
-        points.append((x, y, z))
-    if not points:
-        raise ValueError("coords.hex contains no points")
-    return points
-
-
-@dataclass
-class BucketState:
-    bucket_id: int
-    point_ptr: int
-    point_count: int
-    minimum: Point
-    maximum: Point
-    far_index: int
-    far_dist: float = math.inf
-    merge_points: List[Point] = None  # type: ignore[assignment]
-
-    def __post_init__(self) -> None:
-        if self.merge_points is None:
-            self.merge_points = []
-
-
-def load_buckets(path: Path) -> List[BucketState]:
-    buckets = []
-    with path.open(newline="") as handle:
-        reader = csv.DictReader(handle)
-        for row in reader:
-            buckets.append(
-                BucketState(
-                    bucket_id=int(row["bucket"]),
-                    point_ptr=int(row["point_ptr"]),
-                    point_count=int(row["point_count"]),
-                    minimum=(float(row["minx"]), float(row["miny"]), float(row["minz"])),
-                    maximum=(float(row["maxx"]), float(row["maxy"]), float(row["maxz"])),
-                    far_index=int(row["far_index"]),
-                )
-            )
-    if not buckets:
-        raise ValueError("buckets.csv contains no buckets")
-    return buckets
-
-
-def better(distance: float, index: int, best_distance: float, best_index: int) -> bool:
-    return distance > best_distance or (
-        distance == best_distance and index < best_index
-    )
 
 
 def generate(
-    points: Sequence[Point], buckets: List[BucketState], sample_count: int
+    source: PreprocessedImage,
+    sample_count: int,
+    merge_buffer_capacity: int = 32,
 ) -> Tuple[Workload, List[int]]:
-    if sample_count < 1 or sample_count > len(points):
+    image = source.clone()
+    if sample_count < 1 or sample_count > len(image.coordinates):
         raise ValueError("sample_count must be in [1, point_count]")
-    mdt = [math.inf] * len(points)
+    if merge_buffer_capacity <= 0:
+        raise ValueError("merge_buffer_capacity must be positive")
+
     selected = [0]
     iterations: List[IterationWork] = []
     current = 0
 
     for iteration in range(sample_count - 1):
-        sample = points[current]
+        sample = image.coordinates[current]
         actions: List[BucketAction] = []
         first_iteration = iteration == 0
-        for bucket in buckets:
-            far_d_to_sample = dist2(points[bucket.far_index], sample)
+        for bucket in image.buckets:
+            far_to_sample = dist2(image.coordinates[bucket.far_index], sample)
             lower_bound = box_dist2(sample, bucket.minimum, bucket.maximum)
-            merge_ok = bucket.far_dist < far_d_to_sample
-            implicit_ok = bucket.far_dist < lower_bound
+            merge_ok = bucket.far_distance < far_to_sample
+            implicit_ok = bucket.far_distance < lower_bound
             merge_count = len(bucket.merge_points)
 
-            if not first_iteration and merge_ok and implicit_ok:
-                actions.append(BucketAction(bucket.bucket_id, "skip", merge_count))
+            if first_iteration or not merge_ok:
+                kind = "issue"
+            elif implicit_ok:
+                kind = "skip"
+            elif merge_count >= merge_buffer_capacity:
+                kind = "issue"
+            else:
+                kind = "defer"
+
+            actions.append(BucketAction(bucket.bucket_id, kind, merge_count))
+            if kind == "skip":
                 continue
-            if not first_iteration and merge_ok:
-                actions.append(BucketAction(bucket.bucket_id, "defer", merge_count))
+            if kind == "defer":
                 bucket.merge_points.append(sample)
                 continue
 
-            actions.append(BucketAction(bucket.bucket_id, "issue", merge_count))
             references = list(bucket.merge_points)
             references.append(sample)
-            start = bucket.point_ptr
-            stop = start + bucket.point_count
-            best_index = start
+            bucket.merge_points.clear()
+            best_index = bucket.point_ptr
             best_distance = -1.0
-            for point_index in range(start, stop):
-                value = mdt[point_index]
+            for point_index in range(bucket.point_ptr, bucket.point_stop):
+                value = image.mdt[point_index]
                 for reference in references:
-                    value = min(value, dist2(points[point_index], reference))
-                mdt[point_index] = value
+                    value = min(
+                        value,
+                        dist2(image.coordinates[point_index], reference),
+                    )
+                value = f32(value)
+                image.mdt[point_index] = value
                 if better(value, point_index, best_distance, best_index):
                     best_index = point_index
                     best_distance = value
             bucket.far_index = best_index
-            bucket.far_dist = best_distance
-            bucket.merge_points.clear()
+            bucket.far_distance = best_distance
 
         iterations.append(IterationWork(iteration, current, actions))
-        best_bucket = buckets[0]
-        for bucket in buckets[1:]:
+        best_bucket = image.buckets[0]
+        for bucket in image.buckets[1:]:
             if better(
-                bucket.far_dist,
+                bucket.far_distance,
                 bucket.far_index,
-                best_bucket.far_dist,
+                best_bucket.far_distance,
                 best_bucket.far_index,
             ):
                 best_bucket = bucket
+        if not math.isfinite(best_bucket.far_distance):
+            raise RuntimeError("workload generator observed no finite bucket far point")
         current = best_bucket.far_index
         selected.append(current)
 
     workload = Workload(
         buckets={
             bucket.bucket_id: BucketWork(
-                bucket.bucket_id, bucket.point_ptr, bucket.point_count
+                bucket.bucket_id,
+                bucket.point_ptr,
+                bucket.point_count,
             )
-            for bucket in buckets
+            for bucket in image.buckets
         },
         iterations=iterations,
+        coord_base=image.coord_base,
+        dist_base=image.dist_base,
+        result_base=image.result_base,
         metadata={
-            "point_count": len(points),
+            "point_count": len(image.coordinates),
             "sample_count": sample_count,
             "expected_sequence": selected,
+            "merge_buffer_capacity": merge_buffer_capacity,
             "generator": "cmodel/generate_workload.py",
+            "bucket_metadata_source": "buckets.hex",
         },
     )
     workload.validate()
@@ -187,12 +117,16 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--preprocessed", type=Path, required=True)
     parser.add_argument("--samples", type=int, required=True)
+    parser.add_argument("--merge-buffer-capacity", type=int, default=32)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
-    points = load_coords(args.preprocessed / "coords.hex")
-    buckets = load_buckets(args.preprocessed / "buckets.csv")
-    workload, selected = generate(points, buckets, args.samples)
+    image = PreprocessedImage.load(args.preprocessed)
+    workload, selected = generate(
+        image,
+        args.samples,
+        merge_buffer_capacity=args.merge_buffer_capacity,
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     workload.save(args.output)
     print("sequence=" + ",".join(str(value) for value in selected))
