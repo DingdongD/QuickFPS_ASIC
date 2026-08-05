@@ -137,6 +137,16 @@ jobs:
       - name: Build official pinned DRAMsim3 bridge
         run: bash scripts/build_dramsim3_bridge.sh
 
+      - name: Build KD-tree preprocessing fixture
+        run: |
+          cmake -S HOST -B build/host -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/host --parallel 2
+          build/host/quickfps_preprocess \
+            --input HOST/test_points.xyz \
+            --buckets 2 \
+            --samples 4 \
+            --out build/preprocessed
+
       - name: Create DRAMsim3 smoke workload
         env:
           PYTHONPATH: cmodel
@@ -146,7 +156,7 @@ jobs:
           synthetic_workload([300, 129, 17], iterations=2).save('build/dramsim3_workload.json')
           PY
 
-      - name: Run cycle model with official DRAMsim3
+      - name: Run trace replay with official DRAMsim3
         env:
           PYTHONPATH: cmodel
         run: |
@@ -161,7 +171,7 @@ jobs:
             --far-fifo-depth 2 \
             --dramsim3-lib "$LIB" \
             --dramsim3-config "$CFG" \
-            --dramsim3-output-dir build/dramsim3_stats \
+            --dramsim3-output-dir build/dramsim3_stats_replay \
             --output build/dramsim3_cycle_result.json
           python3 - <<'PY'
           import json
@@ -171,4 +181,32 @@ jobs:
           assert result['cycles'] > 0
           assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
           assert result['counters']['dram_transactions'] > 0
+          PY
+
+      - name: Run closed-loop FPS with official DRAMsim3
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          LIB=$(find build/dramsim3_bridge -name 'libquickfps_dramsim3_bridge.so' -print -quit)
+          CFG=build/dramsim3_bridge/_deps/dramsim3_external-src/configs/DDR4_8Gb_x8_2400.ini
+          python3 -m quickfps_cycle \
+            --preprocessed build/preprocessed \
+            --samples 4 \
+            --chunk-points 4 \
+            --bucket-fifo-depth 2 \
+            --far-fifo-depth 2 \
+            --dramsim3-lib "$LIB" \
+            --dramsim3-config "$CFG" \
+            --dramsim3-output-dir build/dramsim3_stats_closed_loop \
+            --output build/dramsim3_closed_loop_result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('build/dramsim3_closed_loop_result.json').read_text())
+          assert result['mode'] == 'closed-loop'
+          assert result['memory_backend'] == 'dramsim3'
+          assert result['sampled_indices'] == [0, 7, 3, 5], result
+          assert result['matches_golden'] is True
+          assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
+          assert result['memory_stats']['accepted'] == result['memory_stats']['completed']
           PY
