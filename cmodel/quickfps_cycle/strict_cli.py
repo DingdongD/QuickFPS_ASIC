@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .closed_loop import ClosedLoopQuickFPSCycleModel
+from .closed_loop_strict import StrictClosedLoopQuickFPSCycleModel
 from .config import AcceleratorConfig, DramConfig
 from .dramsim3_clock import ClockScaledDramSim3Backend
 from .power import PTPXEnergyModel
@@ -100,7 +100,7 @@ def main() -> int:
     image = None
     if args.preprocessed:
         image = PreprocessedImage.load(args.preprocessed)
-        closed_loop_model = ClosedLoopQuickFPSCycleModel(
+        closed_loop_model = StrictClosedLoopQuickFPSCycleModel(
             image,
             sample_count=_sample_count(args, image),
             first_sample=args.first_sample,
