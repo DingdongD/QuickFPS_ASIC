@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .batched_dramsim3 import ClockScaledBatchedDramSim3Backend
 from .config import AcceleratorConfig, DramConfig
+from .native_closed_loop import NativeStrictClosedLoopQuickFPSCycleModel
 from .power import PTPXEnergyModel
 from .preprocessed import PreprocessedImage
 from .strict_cycle_model import StrictQuickFPSCycleModel
@@ -44,6 +45,20 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("auto", "scalar", "numpy"),
         default="auto",
         help="auto uses the vectorized NumPy distance kernel when available",
+    )
+    parser.add_argument(
+        "--bucket-scheduler",
+        choices=("auto", "python", "native"),
+        default="auto",
+        help=(
+            "auto uses the C++ strict Bucket-Engine scheduler when its library is "
+            "available; python forces the reference scheduler"
+        ),
+    )
+    parser.add_argument(
+        "--native-bucket-scheduler-lib",
+        type=Path,
+        help="path to libquickfps_bucket_scheduler.so",
     )
     parser.add_argument("--dma-stream-outstanding", type=int, default=16)
     parser.add_argument(
@@ -153,6 +168,22 @@ def _diagnostics(result, bucket_count: int | None) -> dict:  # type: ignore[no-u
     }
 
 
+def _native_scheduler_library(args: argparse.Namespace) -> Path | None:
+    if args.native_bucket_scheduler_lib is not None:
+        value = args.native_bucket_scheduler_lib.resolve()
+        if not value.exists():
+            raise SystemExit(f"native Bucket scheduler library does not exist: {value}")
+        return value
+    candidates = [
+        Path("build/native_scheduler/libquickfps_bucket_scheduler.so"),
+        Path("build/native_scheduler/Release/libquickfps_bucket_scheduler.so"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate.resolve()
+    return None
+
+
 def main() -> int:
     args = build_parser().parse_args()
     if not (args.preprocessed or args.workload or args.synthetic_buckets):
@@ -193,11 +224,20 @@ def main() -> int:
     closed_loop_model = None
     image = None
     bucket_count = None
+    scheduler_backend = "trace-replay"
     if args.preprocessed:
         image = PreprocessedImage.load(args.preprocessed)
         bucket_count = len(image.buckets)
-        closed_loop_model = SummaryStrictClosedLoopQuickFPSCycleModel(
-            image,
+        native_library = _native_scheduler_library(args)
+        use_native = args.bucket_scheduler == "native" or (
+            args.bucket_scheduler == "auto" and native_library is not None
+        )
+        if args.bucket_scheduler == "native" and native_library is None:
+            raise SystemExit(
+                "--bucket-scheduler native requires --native-bucket-scheduler-lib "
+                "or build/native_scheduler/libquickfps_bucket_scheduler.so"
+            )
+        common = dict(
             sample_count=_sample_count(args, image),
             first_sample=args.first_sample,
             accelerator=accelerator,
@@ -205,6 +245,20 @@ def main() -> int:
             memory_backend=memory_backend,
             trace_events=not args.no_events,
         )
+        if use_native:
+            assert native_library is not None
+            closed_loop_model = NativeStrictClosedLoopQuickFPSCycleModel(
+                image,
+                native_scheduler_library=native_library,
+                **common,
+            )
+            scheduler_backend = "native-cpp"
+        else:
+            closed_loop_model = SummaryStrictClosedLoopQuickFPSCycleModel(
+                image,
+                **common,
+            )
+            scheduler_backend = "python"
         result = closed_loop_model.run()
         mode = "closed-loop"
     else:
@@ -230,6 +284,7 @@ def main() -> int:
     output = result.to_dict(include_events=not args.no_events)
     output["mode"] = mode
     output["memory_backend"] = "dramsim3" if memory_backend else "analytical"
+    output["bucket_scheduler_backend"] = scheduler_backend
     output["diagnostics"] = _diagnostics(result, bucket_count)
 
     if closed_loop_model is not None and image is not None:
@@ -259,6 +314,7 @@ def main() -> int:
                 if result.counters.get("functional_numpy_enabled", 0)
                 else "scalar"
             ),
+            "bucket_scheduler": scheduler_backend,
             "event_trace_materialized": bool(
                 result.config.get("event_trace_materialized", True)
             ),
@@ -309,6 +365,7 @@ def main() -> int:
     args.output.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n")
     print(
         f"mode={mode} cycles={result.cycles} seconds={result.seconds:.9f} "
+        f"scheduler={scheduler_backend} "
         f"axi_bursts={result.counters.get('axi_bursts', 0)} "
         f"dram_transactions={result.counters.get('dram_transactions', 0)} "
         f"backend={output['memory_backend']} "
