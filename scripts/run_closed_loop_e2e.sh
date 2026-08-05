@@ -14,6 +14,7 @@ shift 4
 
 PREP="$OUT/preprocessed"
 RESULT="$OUT/closed_loop_result.json"
+NATIVE_BUILD="$OUT/native-scheduler-build"
 
 cmake -S HOST -B "$OUT/host-build" -DCMAKE_BUILD_TYPE=Release
 cmake --build "$OUT/host-build" --parallel
@@ -24,10 +25,25 @@ cmake --build "$OUT/host-build" --parallel
   --samples "$SAMPLES" \
   --out "$PREP"
 
+NATIVE_ARGS=()
+if [[ "${QFPS_USE_NATIVE_SCHEDULER:-1}" != "0" ]]; then
+  bash scripts/build_native_scheduler.sh "$NATIVE_BUILD" >/dev/null
+  NATIVE_LIB=$(find "$NATIVE_BUILD" -name 'libquickfps_bucket_scheduler.so' -print -quit)
+  if [[ -z "$NATIVE_LIB" ]]; then
+    echo "native Bucket scheduler library was not produced" >&2
+    exit 1
+  fi
+  NATIVE_ARGS=(
+    --bucket-scheduler native
+    --native-bucket-scheduler-lib "$NATIVE_LIB"
+  )
+fi
+
 PYTHONPATH=cmodel python3 -m quickfps_cycle \
   --preprocessed "$PREP" \
   --samples "$SAMPLES" \
   --output "$RESULT" \
+  "${NATIVE_ARGS[@]}" \
   "$@"
 
 python3 - "$RESULT" <<'PY'
@@ -45,6 +61,7 @@ if not result.get("matches_golden", False):
     )
 print(
     "CLOSED_LOOP_E2E_PASS "
+    f"scheduler={result.get('bucket_scheduler_backend')} "
     f"cycles={result['cycles']} "
     f"sequence={','.join(map(str, result['sampled_indices']))}"
 )
