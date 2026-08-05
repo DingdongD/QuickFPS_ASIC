@@ -19,6 +19,16 @@ class _BatchedOptimizedFunctionalPointEngineSystem(
 ):
     """Use one C-ABI call per accelerator cycle for ready DRAM transactions."""
 
+    def _accept_task(self, cycle: int) -> None:
+        previous_task = self.task
+        super()._accept_task(cycle)
+        if previous_task is None and self.task is not None:
+            self.counters["issued_points"] += self.task.bucket.point_count
+            self.counters["issued_reference_points"] += len(
+                self.task.decision.references
+            )
+            self.counters["issued_merge_points"] += self.task.decision.merge_count
+
     def _schedule_load(
         self, task: FunctionalPointTask, chunk: FunctionalChunk, cycle: int
     ) -> None:
