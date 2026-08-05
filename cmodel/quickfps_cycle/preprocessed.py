@@ -8,6 +8,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
+PIDX_W = 18
+MCNT_W = 8
+E_MINX = 0
+E_MINY = 32
+E_MINZ = 64
+E_MAXX = 96
+E_MAXY = 128
+E_MAXZ = 160
+E_PTR = 192
+E_NUMP = 224
+E_FDIST = 336
+E_FIDX = 368
+E_MCNT = E_FIDX + PIDX_W
+
 
 @dataclass(frozen=True)
 class Point3:
@@ -117,7 +131,12 @@ class PreprocessedImage:
         root = Path(directory)
         coordinates = load_coordinates(root / "coords.hex")
         mdt = load_mdt(root / "dist.hex")
-        buckets = load_buckets(root / "buckets.csv")
+        bucket_hex = root / "buckets.hex"
+        buckets = (
+            load_buckets_hex(bucket_hex)
+            if bucket_hex.exists()
+            else load_buckets_csv(root / "buckets.csv")
+        )
         reorder = load_reorder_map(root / "reorder_map.txt", len(coordinates))
         manifest_path = root / "manifest.json"
         manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
@@ -133,7 +152,10 @@ class PreprocessedImage:
             "finite_mdt_count": len(finite_mdt),
             "mdt_sum": float(sum(finite_mdt)),
             "bucket_far_indices": [bucket.far_index for bucket in self.buckets],
-            "bucket_far_distances": [bucket.far_distance for bucket in self.buckets],
+            "bucket_far_distances": [
+                bucket.far_distance if math.isfinite(bucket.far_distance) else None
+                for bucket in self.buckets
+            ],
             "merge_counts": [len(bucket.merge_points) for bucket in self.buckets],
         }
 
@@ -144,6 +166,10 @@ def f32(value: float) -> float:
 
 def bits_to_float(value: int) -> float:
     return struct.unpack("<f", struct.pack("<I", value & 0xFFFF_FFFF))[0]
+
+
+def field(value: int, offset: int, width: int) -> int:
+    return (value >> offset) & ((1 << width) - 1)
 
 
 def dist2(a: Point3, b: Point3) -> float:
@@ -204,7 +230,42 @@ def load_mdt(path: Path) -> List[float]:
     ]
 
 
-def load_buckets(path: Path) -> List[BucketDescriptor]:
+def load_buckets_hex(path: Path) -> List[BucketDescriptor]:
+    buckets: List[BucketDescriptor] = []
+    for bucket_id, line in enumerate(path.read_text().splitlines()):
+        text = line.strip()
+        if not text:
+            continue
+        packed = int(text, 16)
+        merge_count = field(packed, E_MCNT, MCNT_W)
+        if merge_count != 0:
+            raise ValueError(
+                "preprocessed buckets.hex contains a nonzero merge count but no "
+                "corresponding merge-point payload"
+            )
+        buckets.append(
+            BucketDescriptor(
+                bucket_id=bucket_id,
+                point_ptr=field(packed, E_PTR, 32),
+                point_count=field(packed, E_NUMP, 16),
+                minimum=Point3(
+                    bits_to_float(field(packed, E_MINX, 32)),
+                    bits_to_float(field(packed, E_MINY, 32)),
+                    bits_to_float(field(packed, E_MINZ, 32)),
+                ),
+                maximum=Point3(
+                    bits_to_float(field(packed, E_MAXX, 32)),
+                    bits_to_float(field(packed, E_MAXY, 32)),
+                    bits_to_float(field(packed, E_MAXZ, 32)),
+                ),
+                far_index=field(packed, E_FIDX, PIDX_W),
+                far_distance=bits_to_float(field(packed, E_FDIST, 32)),
+            )
+        )
+    return buckets
+
+
+def load_buckets_csv(path: Path) -> List[BucketDescriptor]:
     buckets: List[BucketDescriptor] = []
     with path.open(newline="") as handle:
         for row in csv.DictReader(handle):
