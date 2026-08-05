@@ -4,9 +4,11 @@ import argparse
 import json
 from pathlib import Path
 
+from .batched_dramsim3 import ClockScaledBatchedDramSim3Backend
+from .batched_optimized_closed_loop import (
+    BatchedOptimizedStrictClosedLoopQuickFPSCycleModel,
+)
 from .config import AcceleratorConfig, DramConfig
-from .dramsim3_clock import ClockScaledDramSim3Backend
-from .optimized_closed_loop import OptimizedStrictClosedLoopQuickFPSCycleModel
 from .power import PTPXEnergyModel
 from .preprocessed import PreprocessedImage
 from .strict_cycle_model import StrictQuickFPSCycleModel
@@ -116,7 +118,7 @@ def main() -> int:
                 "--dramsim3-lib and --dramsim3-config must be supplied together"
             )
         args.dramsim3_output_dir.mkdir(parents=True, exist_ok=True)
-        memory_backend = ClockScaledDramSim3Backend(
+        memory_backend = ClockScaledBatchedDramSim3Backend(
             args.dramsim3_lib,
             args.dramsim3_config,
             args.dramsim3_output_dir,
@@ -127,7 +129,7 @@ def main() -> int:
     image = None
     if args.preprocessed:
         image = PreprocessedImage.load(args.preprocessed)
-        closed_loop_model = OptimizedStrictClosedLoopQuickFPSCycleModel(
+        closed_loop_model = BatchedOptimizedStrictClosedLoopQuickFPSCycleModel(
             image,
             sample_count=_sample_count(args, image),
             first_sample=args.first_sample,
@@ -182,6 +184,7 @@ def main() -> int:
             "point_buffer_preload_timed": False,
             "dma_arbiter": args.dma_arbiter,
             "dma_stream_outstanding": args.dma_stream_outstanding,
+            "dramsim3_batched_cabi": bool(memory_backend),
             "functional_kernel": (
                 "numpy"
                 if result.counters.get("functional_numpy_enabled", 0)
