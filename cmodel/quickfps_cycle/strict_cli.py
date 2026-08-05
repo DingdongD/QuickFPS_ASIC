@@ -4,9 +4,9 @@ import argparse
 import json
 from pathlib import Path
 
-from .closed_loop_strict import StrictClosedLoopQuickFPSCycleModel
 from .config import AcceleratorConfig, DramConfig
 from .dramsim3_clock import ClockScaledDramSim3Backend
+from .optimized_closed_loop import OptimizedStrictClosedLoopQuickFPSCycleModel
 from .power import PTPXEnergyModel
 from .preprocessed import PreprocessedImage
 from .strict_cycle_model import StrictQuickFPSCycleModel
@@ -29,6 +29,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bucket-fifo-depth", type=int, default=8)
     parser.add_argument("--far-fifo-depth", type=int, default=8)
     parser.add_argument("--merge-buffer-capacity", type=int, default=32)
+    parser.add_argument("--point-buffer-capacity-bytes", type=int, default=16 * 1024)
+    parser.add_argument(
+        "--point-buffer-mode",
+        choices=("auto", "streaming", "resident"),
+        default="auto",
+        help=(
+            "auto keeps the complete coordinate+MDT working set resident when it "
+            "fits; streaming always uses DDR; resident requires that it fits"
+        ),
+    )
+    parser.add_argument(
+        "--functional-kernel",
+        choices=("auto", "scalar", "numpy"),
+        default="auto",
+        help="auto uses the vectorized NumPy distance kernel when available",
+    )
+    parser.add_argument("--dma-stream-outstanding", type=int, default=16)
+    parser.add_argument(
+        "--dma-arbiter",
+        choices=("round_robin", "priority"),
+        default="round_robin",
+    )
     parser.add_argument("--dram-banks", type=int, default=16)
     parser.add_argument("--dram-queue-depth", type=int, default=32)
     parser.add_argument("--clock-hz", type=int, default=1_000_000_000)
@@ -76,6 +98,11 @@ def main() -> int:
         bucket_fifo_depth=args.bucket_fifo_depth,
         far_fifo_depth=args.far_fifo_depth,
         merge_buffer_capacity=args.merge_buffer_capacity,
+        point_buffer_capacity_bytes=args.point_buffer_capacity_bytes,
+        point_buffer_mode=args.point_buffer_mode,
+        functional_kernel=args.functional_kernel,
+        dma_stream_outstanding=args.dma_stream_outstanding,
+        dma_arbiter=args.dma_arbiter,
     )
     dram = DramConfig(
         banks_per_channel=args.dram_banks,
@@ -100,7 +127,7 @@ def main() -> int:
     image = None
     if args.preprocessed:
         image = PreprocessedImage.load(args.preprocessed)
-        closed_loop_model = StrictClosedLoopQuickFPSCycleModel(
+        closed_loop_model = OptimizedStrictClosedLoopQuickFPSCycleModel(
             image,
             sample_count=_sample_count(args, image),
             first_sample=args.first_sample,
@@ -146,6 +173,21 @@ def main() -> int:
             "accelerator_seconds": result.seconds,
             "end_to_end_seconds": preprocess_seconds + result.seconds,
         }
+        output["memory_policy"] = {
+            "point_buffer_mode": args.point_buffer_mode,
+            "point_buffer_capacity_bytes": args.point_buffer_capacity_bytes,
+            "point_buffer_resident": bool(
+                result.counters.get("point_buffer_resident_mode", 0)
+            ),
+            "point_buffer_preload_timed": False,
+            "dma_arbiter": args.dma_arbiter,
+            "dma_stream_outstanding": args.dma_stream_outstanding,
+            "functional_kernel": (
+                "numpy"
+                if result.counters.get("functional_numpy_enabled", 0)
+                else "scalar"
+            ),
+        }
         golden = _load_golden(args.preprocessed)
         if golden is not None:
             output["golden_indices"] = golden
@@ -184,7 +226,7 @@ def main() -> int:
                     "SRAM macro energy unless separately characterized",
                     "DDR controller and PHY energy",
                     "DRAM device energy",
-                    "initial host-to-device transfer energy",
+                    "initial host-to-device and resident Point-Buffer preload energy",
                 ],
             }
 
@@ -195,6 +237,7 @@ def main() -> int:
         f"axi_bursts={result.counters.get('axi_bursts', 0)} "
         f"dram_transactions={result.counters.get('dram_transactions', 0)} "
         f"backend={output['memory_backend']} "
+        f"resident={result.counters.get('point_buffer_resident_mode', 0)} "
         f"sequence={','.join(str(value) for value in result.sampled_indices)}"
     )
     if memory_backend is not None:
