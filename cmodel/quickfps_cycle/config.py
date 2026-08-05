@@ -18,13 +18,19 @@ class AcceleratorConfig:
     merge_load_cycles: int = 4
     point_ctrl_overhead: int = 2
     point_io_pipeline_cycles: int = 1
+    merge_buffer_capacity: int = 32
     chunk_points: int = 256
     coord_bytes_per_point: int = 12
     dist_bytes_per_point: int = 4
+    point_buffer_capacity_bytes: int = 16 * 1024
+    point_buffer_mode: str = "auto"
+    functional_kernel: str = "auto"
     dma_bus_bytes: int = 32
     dma_max_burst_beats: int = 16
     dma_channels: int = 4
     dma_command_cycles: int = 2
+    dma_stream_outstanding: int = 16
+    dma_arbiter: str = "round_robin"
     dram_transaction_bytes: int = 64
     sram_read_latency: int = 1
     sram_write_latency: int = 1
@@ -37,6 +43,10 @@ class AcceleratorConfig:
     @property
     def dma_max_burst_bytes(self) -> int:
         return self.dma_bus_bytes * self.dma_max_burst_beats
+
+    @property
+    def point_bytes_per_point(self) -> int:
+        return self.coord_bytes_per_point + self.dist_bytes_per_point
 
     def validate(self) -> None:
         positive = {
@@ -52,13 +62,16 @@ class AcceleratorConfig:
             "merge_load_cycles": self.merge_load_cycles,
             "point_ctrl_overhead": self.point_ctrl_overhead,
             "point_io_pipeline_cycles": self.point_io_pipeline_cycles,
+            "merge_buffer_capacity": self.merge_buffer_capacity,
             "chunk_points": self.chunk_points,
             "coord_bytes_per_point": self.coord_bytes_per_point,
             "dist_bytes_per_point": self.dist_bytes_per_point,
+            "point_buffer_capacity_bytes": self.point_buffer_capacity_bytes,
             "dma_bus_bytes": self.dma_bus_bytes,
             "dma_max_burst_beats": self.dma_max_burst_beats,
             "dma_channels": self.dma_channels,
             "dma_command_cycles": self.dma_command_cycles,
+            "dma_stream_outstanding": self.dma_stream_outstanding,
             "dram_transaction_bytes": self.dram_transaction_bytes,
             "sram_read_latency": self.sram_read_latency,
             "sram_write_latency": self.sram_write_latency,
@@ -75,6 +88,16 @@ class AcceleratorConfig:
             raise ValueError(
                 "bucket_decision_fifo_depth must cover all in-flight CD outputs"
             )
+        if self.point_buffer_mode not in {"auto", "streaming", "resident"}:
+            raise ValueError(
+                "point_buffer_mode must be one of auto, streaming, or resident"
+            )
+        if self.functional_kernel not in {"auto", "scalar", "numpy"}:
+            raise ValueError(
+                "functional_kernel must be one of auto, scalar, or numpy"
+            )
+        if self.dma_arbiter not in {"round_robin", "priority"}:
+            raise ValueError("dma_arbiter must be round_robin or priority")
         if self.dma_bus_bytes & (self.dma_bus_bytes - 1):
             raise ValueError("dma_bus_bytes must be a power of two")
         if self.dram_transaction_bytes & (self.dram_transaction_bytes - 1):
@@ -86,6 +109,7 @@ class AcceleratorConfig:
         value = asdict(self)
         value["pe_row_latency"] = self.pe_row_latency
         value["dma_max_burst_bytes"] = self.dma_max_burst_bytes
+        value["point_bytes_per_point"] = self.point_bytes_per_point
         return value
 
 

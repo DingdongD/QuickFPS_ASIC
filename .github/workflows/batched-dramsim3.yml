@@ -1,0 +1,64 @@
+name: Batched DRAMsim3 Closed Loop
+
+on:
+  push:
+    branches:
+      - feature/closed-loop-cycle-simulator
+  pull_request:
+
+jobs:
+  batched-dramsim3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libconfig++-dev
+
+      - name: Build pinned DRAMsim3 bridge and preprocessing fixture
+        run: |
+          bash scripts/build_dramsim3_bridge.sh
+          cmake -S HOST -B build/host -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/host --parallel 2
+          build/host/quickfps_preprocess \
+            --input HOST/test_points.xyz \
+            --buckets 2 \
+            --samples 4 \
+            --out build/preprocessed
+
+      - name: Run streaming closed loop through batched C ABI
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          LIB=$(find build/dramsim3_bridge -name 'libquickfps_dramsim3_bridge.so' -print -quit)
+          CFG=build/dramsim3_bridge/_deps/dramsim3_external-src/configs/DDR4_8Gb_x8_2400.ini
+          python3 -m quickfps_cycle \
+            --preprocessed build/preprocessed \
+            --samples 4 \
+            --chunk-points 4 \
+            --point-buffer-mode streaming \
+            --functional-kernel scalar \
+            --bucket-fifo-depth 2 \
+            --far-fifo-depth 2 \
+            --dma-stream-outstanding 4 \
+            --dramsim3-lib "$LIB" \
+            --dramsim3-config "$CFG" \
+            --dramsim3-output-dir build/dramsim3_batched_stats \
+            --no-events \
+            --output build/dramsim3_batched_result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path('build/dramsim3_batched_result.json').read_text())
+          assert result['sampled_indices'] == [0, 7, 3, 5], result
+          assert result['matches_golden'] is True
+          assert result['memory_backend'] == 'dramsim3'
+          assert result['memory_policy']['dramsim3_batched_cabi'] is True
+          assert result['counters']['dma_batch_submit_calls'] > 0
+          assert result['memory_stats']['dramsim3_batch_submit_calls'] > 0
+          assert result['counters']['dram_transactions'] > 0
+          assert result['memory_stats']['accepted'] == result['memory_stats']['completed']
+          PY

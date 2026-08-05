@@ -5,6 +5,7 @@ on:
     branches:
       - feature/complete-functional-core
       - feature/cycle-accurate-system
+      - feature/closed-loop-cycle-simulator
   pull_request:
 
 jobs:
@@ -58,7 +59,42 @@ jobs:
           PYTHONPATH: cmodel
         run: python3 -m unittest discover -s cmodel/tests -v
 
-      - name: Generate algorithm trace and simulate cycles
+      - name: Run strict closed-loop FPS from KD-tree partitions
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          python3 -m quickfps_cycle \
+            --preprocessed build/preprocessed \
+            --samples 4 \
+            --chunk-points 4 \
+            --bucket-fifo-depth 2 \
+            --far-fifo-depth 2 \
+            --output build/closed_loop_result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path('build/closed_loop_result.json').read_text())
+          assert result['mode'] == 'closed-loop'
+          assert result['config']['scheduler'] == 'closed-loop-strict-pre-edge-sram-optimized'
+          assert result['sampled_indices'] == [0, 7, 3, 5], result
+          assert result['sampled_indices_original'] == [0, 7, 3, 5], result
+          assert result['matches_golden'] is True
+          assert result['iterations'] == 3
+          assert result['counters']['bucket_cd_inputs'] == 6
+          assert result['counters']['bucket_buffer_read_requests'] == 6
+          assert result['counters']['bucket_buffer_read_responses'] == 6
+          assert result['counters']['bucket_buffer_write_requests'] == result['counters']['issued_buckets']
+          assert result['counters']['bucket_buffer_write_commits'] == result['counters']['bucket_completions']
+          assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
+          assert result['counters']['functional_distance_evaluations'] > 0
+          assert result['counters']['point_buffer_resident_mode'] == 1
+          assert result['counters'].get('dram_transactions', 0) == 0
+          assert result['memory_stats']['accepted'] == result['memory_stats']['completed'] == 0
+          assert result['final_functional_state']['finite_mdt_count'] == 8
+          PY
+
+      - name: Generate algorithm trace and simulate replay cycles
         env:
           PYTHONPATH: cmodel
         run: |
@@ -78,13 +114,14 @@ jobs:
           workload = json.loads(Path('build/quickfps_workload.json').read_text())
           result = json.loads(Path('build/cycle_result.json').read_text())
           assert workload['metadata']['expected_sequence'] == [0, 7, 3, 5]
+          assert result['mode'] == 'trace-replay'
           assert result['iterations'] == 3
           assert result['cycles'] > 0
           assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
           assert result['counters']['dram_transactions'] > result['counters']['axi_bursts']
           PY
 
-      - name: Validate cycle-model assumptions against RTL traces
+      - name: Validate replay cycle-model assumptions against RTL traces
         run: |
           python3 cmodel/validate_rtl_cycles.py \
             --log-dir build/functional \
@@ -106,6 +143,16 @@ jobs:
       - name: Build official pinned DRAMsim3 bridge
         run: bash scripts/build_dramsim3_bridge.sh
 
+      - name: Build KD-tree preprocessing fixture
+        run: |
+          cmake -S HOST -B build/host -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/host --parallel 2
+          build/host/quickfps_preprocess \
+            --input HOST/test_points.xyz \
+            --buckets 2 \
+            --samples 4 \
+            --out build/preprocessed
+
       - name: Create DRAMsim3 smoke workload
         env:
           PYTHONPATH: cmodel
@@ -115,7 +162,7 @@ jobs:
           synthetic_workload([300, 129, 17], iterations=2).save('build/dramsim3_workload.json')
           PY
 
-      - name: Run cycle model with official DRAMsim3
+      - name: Run trace replay with official DRAMsim3
         env:
           PYTHONPATH: cmodel
         run: |
@@ -123,14 +170,14 @@ jobs:
           CFG=build/dramsim3_bridge/_deps/dramsim3_external-src/configs/DDR4_8Gb_x8_2400.ini
           test -f "$LIB"
           test -f "$CFG"
-          python3 -m quickfps_cycle.cli \
+          python3 -m quickfps_cycle \
             --workload build/dramsim3_workload.json \
             --chunk-points 128 \
             --bucket-fifo-depth 2 \
             --far-fifo-depth 2 \
             --dramsim3-lib "$LIB" \
             --dramsim3-config "$CFG" \
-            --dramsim3-output-dir build/dramsim3_stats \
+            --dramsim3-output-dir build/dramsim3_stats_replay \
             --output build/dramsim3_cycle_result.json
           python3 - <<'PY'
           import json
@@ -140,4 +187,33 @@ jobs:
           assert result['cycles'] > 0
           assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
           assert result['counters']['dram_transactions'] > 0
+          PY
+
+      - name: Run closed-loop FPS with official DRAMsim3
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          LIB=$(find build/dramsim3_bridge -name 'libquickfps_dramsim3_bridge.so' -print -quit)
+          CFG=build/dramsim3_bridge/_deps/dramsim3_external-src/configs/DDR4_8Gb_x8_2400.ini
+          python3 -m quickfps_cycle \
+            --preprocessed build/preprocessed \
+            --samples 4 \
+            --chunk-points 4 \
+            --bucket-fifo-depth 2 \
+            --far-fifo-depth 2 \
+            --dramsim3-lib "$LIB" \
+            --dramsim3-config "$CFG" \
+            --dramsim3-output-dir build/dramsim3_stats_closed_loop \
+            --output build/dramsim3_closed_loop_result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('build/dramsim3_closed_loop_result.json').read_text())
+          assert result['mode'] == 'closed-loop'
+          assert result['memory_backend'] == 'dramsim3'
+          assert result['sampled_indices'] == [0, 7, 3, 5], result
+          assert result['matches_golden'] is True
+          assert result['counters']['bucket_buffer_read_requests'] == 6
+          assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
+          assert result['memory_stats']['accepted'] == result['memory_stats']['completed']
           PY

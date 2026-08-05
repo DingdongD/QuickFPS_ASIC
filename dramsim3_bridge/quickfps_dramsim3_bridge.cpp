@@ -57,6 +57,23 @@ public:
         return true;
     }
 
+    std::uint64_t add_batch(const std::uint64_t* addresses,
+                            const int* is_writes,
+                            const std::uint64_t* tags,
+                            std::uint64_t count) {
+        if (addresses == nullptr || is_writes == nullptr || tags == nullptr) {
+            return 0;
+        }
+        std::uint64_t accepted = 0;
+        for (; accepted < count; ++accepted) {
+            if (!add(addresses[accepted], is_writes[accepted] != 0,
+                     tags[accepted])) {
+                break;
+            }
+        }
+        return accepted;
+    }
+
     void tick() { memory_->ClockTick(); }
 
     bool poll(Completion& completion) {
@@ -66,6 +83,25 @@ public:
         completion = completions_.front();
         completions_.pop_front();
         return true;
+    }
+
+    std::uint64_t poll_batch(std::uint64_t* tags,
+                             std::uint64_t* addresses,
+                             int* is_writes,
+                             std::uint64_t capacity) {
+        if (tags == nullptr || addresses == nullptr || is_writes == nullptr) {
+            return 0;
+        }
+        std::uint64_t count = 0;
+        while (count < capacity && !completions_.empty()) {
+            const Completion completion = completions_.front();
+            completions_.pop_front();
+            tags[count] = completion.tag;
+            addresses[count] = completion.address;
+            is_writes[count] = completion.is_write ? 1 : 0;
+            ++count;
+        }
+        return count;
     }
 
 private:
@@ -136,6 +172,18 @@ int qfps_dramsim3_add(void* handle,
                : 0;
 }
 
+std::uint64_t qfps_dramsim3_add_batch(void* handle,
+                                      const std::uint64_t* addresses,
+                                      const int* is_writes,
+                                      const std::uint64_t* tags,
+                                      std::uint64_t count) {
+    if (handle == nullptr) {
+        return 0;
+    }
+    return static_cast<Bridge*>(handle)->add_batch(
+        addresses, is_writes, tags, count);
+}
+
 void qfps_dramsim3_tick(void* handle) {
     if (handle != nullptr) {
         static_cast<Bridge*>(handle)->tick();
@@ -158,6 +206,18 @@ int qfps_dramsim3_poll(void* handle,
     *address = completion.address;
     *is_write = completion.is_write ? 1 : 0;
     return 1;
+}
+
+std::uint64_t qfps_dramsim3_poll_batch(void* handle,
+                                       std::uint64_t* tags,
+                                       std::uint64_t* addresses,
+                                       int* is_writes,
+                                       std::uint64_t capacity) {
+    if (handle == nullptr) {
+        return 0;
+    }
+    return static_cast<Bridge*>(handle)->poll_batch(
+        tags, addresses, is_writes, capacity);
 }
 
 }  // extern "C"

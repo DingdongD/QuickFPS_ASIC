@@ -1,0 +1,65 @@
+name: Native Bucket Scheduler
+
+on:
+  push:
+    branches:
+      - feature/closed-loop-cycle-simulator
+  pull_request:
+
+jobs:
+  native-scheduler:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build native scheduler and host preprocessor
+        run: |
+          bash scripts/build_native_scheduler.sh
+          cmake -S HOST -B build/host -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/host --parallel 2
+          build/host/quickfps_preprocess \
+            --input HOST/test_points.xyz \
+            --buckets 2 \
+            --samples 4 \
+            --out build/preprocessed
+
+      - name: Run native/Python differential tests
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          LIB=$(find build/native_scheduler -name 'libquickfps_bucket_scheduler.so' -print -quit)
+          test -f "$LIB"
+          QFPS_NATIVE_SCHEDULER_LIB="$LIB" \
+            python3 -m unittest cmodel.tests.test_native_bucket_scheduler -v
+
+      - name: Run public CLI with native strict scheduler
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          LIB=$(find build/native_scheduler -name 'libquickfps_bucket_scheduler.so' -print -quit)
+          python3 -m quickfps_cycle \
+            --preprocessed build/preprocessed \
+            --samples 4 \
+            --chunk-points 4 \
+            --bucket-fifo-depth 2 \
+            --far-fifo-depth 2 \
+            --bucket-scheduler native \
+            --native-bucket-scheduler-lib "$LIB" \
+            --functional-kernel scalar \
+            --no-events \
+            --output build/native_closed_loop_result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path('build/native_closed_loop_result.json').read_text())
+          assert result['mode'] == 'closed-loop'
+          assert result['bucket_scheduler_backend'] == 'native-cpp'
+          assert result['config']['scheduler'] == 'native-cpp-closed-loop-strict-pre-edge-sram'
+          assert result['sampled_indices'] == [0, 7, 3, 5], result
+          assert result['matches_golden'] is True
+          assert result['counters']['issued_buckets'] == result['counters']['bucket_completions']
+          assert result['counters']['bucket_cd_inputs'] == 6
+          assert result['memory_policy']['bucket_scheduler'] == 'native-cpp'
+          assert result['memory_policy']['event_trace_materialized'] is False
+          PY
