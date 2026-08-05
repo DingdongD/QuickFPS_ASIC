@@ -1,0 +1,26 @@
+name: NumPy Functional Kernel
+
+on:
+  push:
+    branches:
+      - feature/closed-loop-cycle-simulator
+  pull_request:
+
+jobs:
+  numpy-kernel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install NumPy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-numpy
+
+      - name: Compare scalar and vectorized closed-loop states
+        env:
+          PYTHONPATH: cmodel
+        run: |
+          python3 -m unittest \
+            cmodel.tests.test_memory_optimized_closed_loop.FunctionalKernelTest \
+            -v
