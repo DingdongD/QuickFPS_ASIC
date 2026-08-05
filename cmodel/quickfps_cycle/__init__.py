@@ -5,8 +5,10 @@ from .closed_loop_strict import StrictClosedLoopQuickFPSCycleModel
 from .config import AcceleratorConfig, DramConfig
 from .cycle_model import QuickFPSCycleModel
 from .model import SimulationResult
+from .native_closed_loop import NativeStrictClosedLoopQuickFPSCycleModel
 from .optimized_closed_loop import OptimizedStrictClosedLoopQuickFPSCycleModel
 from .preprocessed import BucketDescriptor, Point3, PreprocessedImage
+from .summary_closed_loop import SummaryStrictClosedLoopQuickFPSCycleModel
 from .workload import BucketAction, BucketWork, IterationWork, Workload
 
 __all__ = [
@@ -16,6 +18,8 @@ __all__ = [
     "ClosedLoopQuickFPSCycleModel",
     "StrictClosedLoopQuickFPSCycleModel",
     "OptimizedStrictClosedLoopQuickFPSCycleModel",
+    "SummaryStrictClosedLoopQuickFPSCycleModel",
+    "NativeStrictClosedLoopQuickFPSCycleModel",
     "SimulationResult",
     "Point3",
     "BucketDescriptor",
